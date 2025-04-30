@@ -1,0 +1,368 @@
+import React, { useState, useEffect } from 'react';
+import { File, Edit2, Database, Table2, Eye, Download, Save, Plus } from 'lucide-react';
+import { useAppContext } from '../context/AppContext';
+
+interface TableMetadata {
+  id: string;
+  name: string;
+  description: string;
+  columns: ColumnMetadata[];
+  rowCount: number;
+  isSelected?: boolean;
+}
+
+interface ColumnMetadata {
+  id: string;
+  name: string;
+  dataType: string;
+  description: string;
+  isNullable: boolean;
+  isPrimaryKey: boolean;
+  isForeignKey: boolean;
+  isEdited?: boolean;
+}
+
+const MetadataPage: React.FC = () => {
+  const { connectionStatus, setMetadata } = useAppContext();
+  const [tables, setTables] = useState<TableMetadata[]>([]);
+  const [selectedTable, setSelectedTable] = useState<TableMetadata | null>(null);
+  const [editingColumn, setEditingColumn] = useState<string | null>(null);
+  const [editingDescription, setEditingDescription] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Mock data for demo purposes
+  useEffect(() => {
+    if (connectionStatus) {
+      const mockTables: TableMetadata[] = [
+        {
+          id: '1',
+          name: 'CUSTOMERS',
+          description: 'Customer information and details',
+          rowCount: 15243,
+          columns: [
+            { id: '1-1', name: 'CUSTOMER_ID', dataType: 'VARCHAR(16)', description: 'Unique customer identifier', isNullable: false, isPrimaryKey: true, isForeignKey: false },
+            { id: '1-2', name: 'FIRST_NAME', dataType: 'VARCHAR(50)', description: 'Customer first name', isNullable: false, isPrimaryKey: false, isForeignKey: false },
+            { id: '1-3', name: 'LAST_NAME', dataType: 'VARCHAR(50)', description: 'Customer last name', isNullable: false, isPrimaryKey: false, isForeignKey: false },
+            { id: '1-4', name: 'EMAIL', dataType: 'VARCHAR(255)', description: 'Customer email address', isNullable: false, isPrimaryKey: false, isForeignKey: false },
+            { id: '1-5', name: 'PHONE', dataType: 'VARCHAR(20)', description: 'Customer phone number', isNullable: true, isPrimaryKey: false, isForeignKey: false },
+            { id: '1-6', name: 'ADDRESS', dataType: 'VARCHAR(100)', description: 'Street address', isNullable: true, isPrimaryKey: false, isForeignKey: false },
+            { id: '1-7', name: 'CITY', dataType: 'VARCHAR(50)', description: 'City name', isNullable: true, isPrimaryKey: false, isForeignKey: false },
+            { id: '1-8', name: 'STATE', dataType: 'VARCHAR(2)', description: 'State code', isNullable: true, isPrimaryKey: false, isForeignKey: false },
+            { id: '1-9', name: 'ZIP_CODE', dataType: 'VARCHAR(10)', description: 'Zip/Postal code', isNullable: true, isPrimaryKey: false, isForeignKey: false },
+          ]
+        },
+        {
+          id: '2',
+          name: 'ORDERS',
+          description: 'Customer order information',
+          rowCount: 54321,
+          columns: [
+            { id: '2-1', name: 'ORDER_ID', dataType: 'VARCHAR(16)', description: 'Unique order identifier', isNullable: false, isPrimaryKey: true, isForeignKey: false },
+            { id: '2-2', name: 'CUSTOMER_ID', dataType: 'VARCHAR(16)', description: 'Reference to customer', isNullable: false, isPrimaryKey: false, isForeignKey: true },
+            { id: '2-3', name: 'ORDER_DATE', dataType: 'TIMESTAMP_NTZ', description: 'Date and time of order placement', isNullable: false, isPrimaryKey: false, isForeignKey: false },
+            { id: '2-4', name: 'STATUS', dataType: 'VARCHAR(20)', description: 'Current order status', isNullable: false, isPrimaryKey: false, isForeignKey: false },
+            { id: '2-5', name: 'TOTAL_AMOUNT', dataType: 'NUMBER(10,2)', description: 'Total order amount', isNullable: false, isPrimaryKey: false, isForeignKey: false },
+          ]
+        },
+        {
+          id: '3',
+          name: 'PRODUCTS',
+          description: 'Product catalog information',
+          rowCount: 1250,
+          columns: [
+            { id: '3-1', name: 'PRODUCT_ID', dataType: 'VARCHAR(16)', description: 'Unique product identifier', isNullable: false, isPrimaryKey: true, isForeignKey: false },
+            { id: '3-2', name: 'PRODUCT_NAME', dataType: 'VARCHAR(100)', description: 'Product name', isNullable: false, isPrimaryKey: false, isForeignKey: false },
+            { id: '3-3', name: 'CATEGORY', dataType: 'VARCHAR(50)', description: 'Product category', isNullable: false, isPrimaryKey: false, isForeignKey: false },
+            { id: '3-4', name: 'PRICE', dataType: 'NUMBER(10,2)', description: 'Product price', isNullable: false, isPrimaryKey: false, isForeignKey: false },
+            { id: '3-5', name: 'DESCRIPTION', dataType: 'TEXT', description: 'Product description', isNullable: true, isPrimaryKey: false, isForeignKey: false },
+            { id: '3-6', name: 'IN_STOCK', dataType: 'BOOLEAN', description: 'Availability status', isNullable: false, isPrimaryKey: false, isForeignKey: false },
+          ]
+        }
+      ];
+      
+      setTables(mockTables);
+      setMetadata(mockTables);
+    }
+  }, [connectionStatus, setMetadata]);
+
+  const handleSelectTable = (tableId: string) => {
+    const table = tables.find(t => t.id === tableId) || null;
+    setSelectedTable(table);
+    setEditingColumn(null);
+  };
+
+  const handleEditColumn = (columnId: string, description: string) => {
+    setEditingColumn(columnId);
+    setEditingDescription(description);
+  };
+
+  const handleSaveDescription = (columnId: string) => {
+    if (!selectedTable) return;
+    
+    const updatedTable = {
+      ...selectedTable,
+      columns: selectedTable.columns.map(col => 
+        col.id === columnId 
+          ? { ...col, description: editingDescription, isEdited: true } 
+          : col
+      )
+    };
+    
+    setSelectedTable(updatedTable);
+    setTables(tables.map(table => 
+      table.id === updatedTable.id ? updatedTable : table
+    ));
+    
+    setEditingColumn(null);
+  };
+
+  const filteredTables = tables.filter(table => 
+    table.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (!connectionStatus) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="text-center">
+          <h2 className="text-xl font-medium text-gray-900">Database Connection Required</h2>
+          <p className="mt-2 text-sm text-gray-500">
+            Please connect to a Snowflake database before accessing metadata
+          </p>
+          <a href="/connect" className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700">
+            Connect to Database
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="py-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">Schema Metadata</h1>
+            <p className="mt-1 text-sm text-gray-700">
+              View and customize database schema metadata for better query understanding
+            </p>
+          </div>
+          <div className="flex space-x-2">
+            <button
+              type="button"
+              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              onClick={() => setIsEditing(!isEditing)}
+            >
+              {isEditing ? (
+                <>
+                  <Eye className="mr-2 h-4 w-4" />
+                  View Mode
+                </>
+              ) : (
+                <>
+                  <Edit2 className="mr-2 h-4 w-4" />
+                  Edit Mode
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export Metadata
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-8 flex h-[calc(100vh-12rem)]">
+          {/* Left sidebar - Tables list */}
+          <div className="w-64 border-r border-gray-200 overflow-y-auto">
+            <div className="px-3 py-3 border-b border-gray-200">
+              <div className="relative">
+                <input
+                  type="text"
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  placeholder="Search tables"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <div className="overflow-y-auto h-full">
+              <ul className="divide-y divide-gray-200">
+                {filteredTables.map((table) => (
+                  <li key={table.id}>
+                    <button
+                      className={`w-full px-3 py-3 flex items-start hover:bg-gray-50 focus:outline-none ${
+                        selectedTable?.id === table.id ? 'bg-primary-50' : ''
+                      }`}
+                      onClick={() => handleSelectTable(table.id)}
+                    >
+                      <Table2 className={`flex-shrink-0 h-5 w-5 ${selectedTable?.id === table.id ? 'text-primary-600' : 'text-gray-400'}`} />
+                      <div className="ml-3 text-left">
+                        <p className={`text-sm font-medium ${selectedTable?.id === table.id ? 'text-primary-600' : 'text-gray-900'}`}>
+                          {table.name}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1 truncate w-44">
+                          {table.description}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {table.columns.length} columns · {table.rowCount.toLocaleString()} rows
+                        </p>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Main content - Selected table details */}
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {selectedTable ? (
+              <>
+                <div className="px-6 py-4 border-b border-gray-200 bg-white">
+                  <div className="flex justify-between">
+                    <div>
+                      <h2 className="text-lg font-medium text-gray-900">
+                        <span className="text-gray-500 font-normal">Table:</span> {selectedTable.name}
+                      </h2>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {selectedTable.description}
+                      </p>
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      >
+                        <Database className="mr-2 h-4 w-4 text-gray-500" />
+                        Preview Data
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50 sticky top-0 z-10">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Column Name
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Data Type
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Description
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Properties
+                        </th>
+                        {isEditing && (
+                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {selectedTable.columns.map((column) => (
+                        <tr key={column.id} className={column.isEdited ? 'bg-green-50' : ''}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {column.name}
+                            {column.isPrimaryKey && (
+                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                PK
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <code className="bg-gray-100 px-1 py-0.5 rounded text-sm">
+                              {column.dataType}
+                            </code>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {editingColumn === column.id ? (
+                              <div className="flex items-center">
+                                <input
+                                  type="text"
+                                  className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                                  value={editingDescription}
+                                  onChange={(e) => setEditingDescription(e.target.value)}
+                                />
+                                <button
+                                  className="ml-2 inline-flex items-center p-1 border border-transparent rounded-full shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                                  onClick={() => handleSaveDescription(column.id)}
+                                >
+                                  <Save className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              column.description
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div className="flex space-x-2">
+                              {column.isPrimaryKey && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  Primary Key
+                                </span>
+                              )}
+                              {column.isForeignKey && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                  Foreign Key
+                                </span>
+                              )}
+                              {column.isNullable ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                  Nullable
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                  Not Null
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          {isEditing && (
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              <button
+                                className="text-primary-600 hover:text-primary-900"
+                                onClick={() => handleEditColumn(column.id, column.description)}
+                              >
+                                Edit
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center bg-gray-50">
+                <div className="text-center">
+                  <Database className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">No table selected</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Select a table from the list to view and edit its metadata
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default MetadataPage;
