@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { Play, Save, PlusCircle, CheckCircle, Code, FileText, Trash2, Download, Upload, ChevronRight, Lightbulb, CheckCircle2, AlignLeft, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Play, Save, PlusCircle, CheckCircle, Code, FileText, Trash2, Download, Upload, ChevronRight, Lightbulb, CheckCircle2, AlignLeft, RefreshCw, BarChart3, LineChart, PieChart, File, GitBranch, Clock, Edit3, Check, X, ChevronDown } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import Editor from '@monaco-editor/react';
+import toast, { Toaster } from 'react-hot-toast';
 
 interface NotebookCell {
   id: string;
@@ -8,20 +10,17 @@ interface NotebookCell {
   content: string;
   output?: any;
   isExecuting?: boolean;
-  isActive?: boolean;
+  isActive: boolean;
 }
 
 const NotebookPage: React.FC = () => {
-  const { connectionStatus } = useAppContext();
+  const { connectionStatus, selectedDataFrame, setSelectedDataFrame } = useAppContext();
   const [notebookName, setNotebookName] = useState<string>('Untitled Notebook');
   const [isEditingName, setIsEditingName] = useState<boolean>(false);
   const [copilotOpen, setCopilotOpen] = useState<boolean>(true);
   const [copilotQuery, setCopilotQuery] = useState<string>('');
-  const [copilotSuggestions, setCopilotSuggestions] = useState<string[]>([
-    'Generate a bar chart of sales by category',
-    'Calculate correlation between order value and customer age',
-    'Perform time series analysis on monthly sales',
-  ]);
+  const [loadingCopilotSuggestion, setLoadingCopilotSuggestion] = useState(false);
+  const [activeCellId, setActiveCellId] = useState<string | null>(null);
 
   // Initial cells
   const [cells, setCells] = useState<NotebookCell[]>([
@@ -64,6 +63,35 @@ const NotebookPage: React.FC = () => {
     },
   ]);
 
+  // Set initial active cell ID
+  useEffect(() => {
+    const active = cells.find(c => c.isActive);
+    if (active) {
+      setActiveCellId(active.id);
+    }
+  }, []);
+
+  // Effect to add cell with data from query page
+  useEffect(() => {
+    if (selectedDataFrame) {
+      const newCell: NotebookCell = {
+        id: Date.now().toString(),
+        type: 'code',
+        content: `# Data loaded from Query Page\ndf = pd.DataFrame(${JSON.stringify(selectedDataFrame, null, 2)})\n\ndf.head()`,
+        isActive: true, 
+        isExecuting: false, 
+        output: undefined
+      };
+      setCells(prevCells => {
+        const updatedCells = prevCells.map(c => ({...c, isActive: false }));
+        updatedCells.push(newCell);
+        return updatedCells;
+      });
+      setActiveCellId(newCell.id);
+      setSelectedDataFrame(null);
+    }
+  }, [selectedDataFrame, setSelectedDataFrame]);
+
   const handleCellContentChange = (id: string, content: string) => {
     setCells(cells.map(cell => 
       cell.id === id ? { ...cell, content } : cell
@@ -72,11 +100,12 @@ const NotebookPage: React.FC = () => {
 
   const handleCellTypeChange = (id: string, type: 'code' | 'markdown') => {
     setCells(cells.map(cell => 
-      cell.id === id ? { ...cell, type } : cell
+      cell.id === id ? { ...cell, type, output: undefined } : cell
     ));
   };
 
   const handleCellActive = (id: string) => {
+    setActiveCellId(id);
     setCells(cells.map(cell => 
       ({ ...cell, isActive: cell.id === id })
     ));
@@ -89,6 +118,8 @@ const NotebookPage: React.FC = () => {
       type,
       content: '',
       isActive: true,
+      isExecuting: false,
+      output: undefined
     };
     
     const newCells = [...cells];
@@ -97,53 +128,66 @@ const NotebookPage: React.FC = () => {
     setCells(newCells.map(cell => 
       ({ ...cell, isActive: cell.id === newCell.id })
     ));
+    setActiveCellId(newCell.id);
   };
 
   const deleteCell = (id: string) => {
-    if (cells.length <= 1) return; // Don't allow deleting the last cell
+    if (cells.length <= 1) return;
     
     const index = cells.findIndex(cell => cell.id === id);
     const newCells = cells.filter(cell => cell.id !== id);
     
-    // Make the next cell active, or the previous if we deleted the last one
+    let newActiveId: string | null = null;
     if (newCells.length > 0) {
-      const newActiveIndex = Math.min(index, newCells.length - 1);
-      newCells[newActiveIndex].isActive = true;
+      if (index < newCells.length) {
+        newActiveId = newCells[index].id;
+      } else {
+        newActiveId = newCells[newCells.length - 1].id;
+      }
     }
-    
-    setCells(newCells);
+
+    setCells(newCells.map(cell => ({...cell, isActive: cell.id === newActiveId})) );
+    setActiveCellId(newActiveId);
   };
 
   const executeCell = (id: string) => {
-    setCells(cells.map(cell => 
-      cell.id === id ? { ...cell, isExecuting: true } : cell
-    ));
+    let targetCell: NotebookCell | undefined;
+    setCells(prevCells => prevCells.map(cell => {
+      if (cell.id === id) {
+        targetCell = { ...cell, isExecuting: true };
+        return targetCell;
+      }
+      return cell;
+    }));
     
-    // Simulate execution delay
+    if (!targetCell) return;
+    const codeContent = targetCell.content.toLowerCase();
+
     setTimeout(() => {
-      setCells(cells.map(cell => {
+      setCells(prevCells => prevCells.map(cell => {
         if (cell.id === id) {
           let output;
           
-          // Mock outputs based on content
-          if (cell.content.includes('df.head()')) {
-            output = `   category  total_sales
-0  Electronics   527350.75
-1  Home & Kitchen   423150.25
-2  Clothing   356280.50
-3  Sports & Outdoors   289750.00
-4  Beauty & Personal Care   157680.75`;
-          } else if (cell.content.includes('barplot')) {
-            output = { type: 'image', url: 'https://images.pexels.com/photos/7567434/pexels-photo-7567434.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2' };
-          } else if (cell.content.includes('plt.')) {
-            output = { type: 'image', url: 'https://images.pexels.com/photos/5496464/pexels-photo-5496464.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2' };
-          } else if (cell.content.includes('correlation')) {
-            output = `
-              customer_age  order_value
-customer_age     1.000000      0.687542
-order_value      0.687542      1.000000`;
-          } else if (cell.content.trim()) {
-            output = 'Executed successfully';
+          if (codeContent.includes('df.head()') || codeContent.includes('print(df')) {
+            output = `   category  total_sales\n0  Electronics   527350.75\n1  Home & Kitchen   423150.25\n2  Clothing   356280.50`;
+          } else if (codeContent.includes('barplot') || codeContent.includes('kind=\'bar\'')) {
+            output = { type: 'image', url: 'https://via.placeholder.com/600x400.png?text=Mock+Bar+Chart' };
+          } else if (codeContent.includes('lineplot') || codeContent.includes('kind=\'line\'')) {
+            output = { type: 'image', url: 'https://via.placeholder.com/600x400.png?text=Mock+Line+Chart' };
+          } else if (codeContent.includes('scatterplot') || codeContent.includes('kind=\'scatter\'')) {
+            output = { type: 'image', url: 'https://via.placeholder.com/600x400.png?text=Mock+Scatter+Plot' };
+          } else if (codeContent.includes('heatmap')) {
+            output = { type: 'image', url: 'https://via.placeholder.com/600x400.png?text=Mock+Heatmap' };
+          } else if (codeContent.includes('plt.show()') || codeContent.includes('.plot()')) {
+            output = { type: 'image', url: 'https://via.placeholder.com/600x400.png?text=Mock+Generic+Plot' };
+          } else if (codeContent.includes('correlation')) {
+            output = `\n              customer_age  order_value\ncustomer_age     1.000000      0.687542\norder_value      0.687542      1.000000`;
+          } else if (codeContent.trim() && !codeContent.startsWith('#') && !codeContent.includes('import')) {
+            // Mock success for non-empty, non-comment/import code
+            output = 'Executed successfully'; 
+          } else {
+            // No output for imports, comments, or empty cells
+            output = undefined;
           }
           
           return { ...cell, isExecuting: false, output };
@@ -159,6 +203,21 @@ order_value      0.687542      1.000000`;
         setTimeout(() => executeCell(cell.id), index * 1000);
       }
     });
+  };
+
+  // Mock handler for Save Notebook
+  const handleSaveNotebook = () => {
+    toast.success('Notebook saved! (Mock)');
+  };
+
+  // Mock handler for Download Notebook
+  const handleDownloadNotebook = () => {
+    toast.success('Notebook download started... (Mock)');
+  };
+
+  // Mock handler for Upload Notebook
+  const handleUploadNotebook = () => {
+    toast.success('Notebook upload successful! (Mock)');
   };
 
   const handleCopilotSuggestion = (suggestion: string) => {
@@ -250,63 +309,61 @@ plt.show()`;
 
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)]">
+      <Toaster position="top-center" reverseOrder={false} />
       {/* Notebook header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4 sm:px-6">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center">
-            {isEditingName ? (
-              <div className="flex items-center">
-                <input
-                  type="text"
-                  className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-64 sm:text-lg border-gray-300 rounded-md font-medium"
-                  value={notebookName}
-                  onChange={(e) => setNotebookName(e.target.value)}
-                  onBlur={() => setIsEditingName(false)}
-                  onKeyDown={(e) => e.key === 'Enter' && setIsEditingName(false)}
-                  autoFocus
-                />
-                <CheckCircle
-                  className="ml-2 h-5 w-5 text-primary-600 cursor-pointer"
-                  onClick={() => setIsEditingName(false)}
-                />
-              </div>
-            ) : (
-              <h1
-                className="text-xl font-medium text-gray-900 cursor-pointer"
-                onClick={() => setIsEditingName(true)}
-              >
-                {notebookName}
-              </h1>
-            )}
-            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-              Saved
-            </span>
-          </div>
+      <div className="bg-white border-b border-gray-200 px-4 py-2 sm:px-6 flex items-center justify-between">
+        <div className="flex items-center">
+          {isEditingName ? (
+            <div className="flex items-center">
+              <input
+                type="text"
+                className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-64 sm:text-lg border-gray-300 rounded-md font-medium"
+                value={notebookName}
+                onChange={(e) => setNotebookName(e.target.value)}
+                onBlur={() => setIsEditingName(false)}
+                onKeyDown={(e) => e.key === 'Enter' && setIsEditingName(false)}
+                autoFocus
+              />
+              <CheckCircle
+                className="ml-2 h-5 w-5 text-primary-600 cursor-pointer"
+                onClick={() => setIsEditingName(false)}
+              />
+            </div>
+          ) : (
+            <h1
+              className="text-xl font-medium text-gray-900 cursor-pointer"
+              onClick={() => setIsEditingName(true)}
+            >
+              {notebookName}
+            </h1>
+          )}
+          <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            Saved
+          </span>
+        </div>
 
-          <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            >
-              <Upload className="mr-2 h-4 w-4 text-gray-500" />
-              Share
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            >
-              <Download className="mr-2 h-4 w-4 text-gray-500" />
-              Export
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              onClick={executeAllCells}
-            >
-              <Play className="mr-2 h-4 w-4" />
-              Run All
-            </button>
+        <div className="flex items-center space-x-2">
+          {/* Mock Version History Dropdown */}
+           <div className="relative inline-block text-left" title="View notebook version history (Mock)"> {/* Tooltip */} 
+              <button type="button" className="inline-flex items-center justify-center w-full rounded-md border border-gray-300 shadow-sm px-3 py-1 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
+                  <Clock className="mr-1.5 h-3.5 w-3.5 text-gray-400" />
+                  Latest
+                  <ChevronDown className="-mr-1 ml-1 h-4 w-4" />
+              </button>
           </div>
+          
+          <button onClick={handleSaveNotebook} title="Save notebook (Mock)" className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded shadow-sm text-white bg-primary-600 hover:bg-primary-700">
+            <Save className="mr-1.5 h-3.5 w-3.5" /> Save
+          </button>
+          <button onClick={handleDownloadNotebook} title="Download notebook (Mock)" className="inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50">
+             <Download className="mr-1.5 h-3.5 w-3.5" /> Download
+          </button>
+           <button onClick={handleUploadNotebook} title="Upload notebook (Mock)" className="inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50">
+             <Upload className="mr-1.5 h-3.5 w-3.5" /> Upload
+          </button>
+           <button onClick={executeAllCells} title="Run all code cells" className="inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50">
+             <Play className="mr-1.5 h-3.5 w-3.5" /> Run All
+          </button>
         </div>
       </div>
 
@@ -318,66 +375,23 @@ plt.show()`;
             {cells.map((cell) => (
               <div
                 key={cell.id}
-                className={`notebook-cell ${cell.isActive ? 'notebook-cell-active' : ''}`}
+                className={`relative group border rounded-md transition-shadow duration-200 ${cell.isActive ? 'border-primary-500 shadow-md' : 'border-gray-200 hover:border-gray-300'}`}
                 onClick={() => handleCellActive(cell.id)}
               >
                 {/* Cell toolbar */}
-                <div className="bg-gray-50 px-4 py-2 flex items-center justify-between border-b border-gray-200">
-                  <div className="flex items-center space-x-2">
-                    <div className="flex border border-gray-300 rounded-md overflow-hidden">
-                      <button
-                        type="button"
-                        className={`px-3 py-1 text-xs font-medium ${
-                          cell.type === 'code'
-                            ? 'bg-primary-100 text-primary-800'
-                            : 'bg-white text-gray-700 hover:bg-gray-50'
-                        }`}
-                        onClick={() => handleCellTypeChange(cell.id, 'code')}
-                      >
-                        <Code className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        className={`px-3 py-1 text-xs font-medium ${
-                          cell.type === 'markdown'
-                            ? 'bg-primary-100 text-primary-800'
-                            : 'bg-white text-gray-700 hover:bg-gray-50'
-                        }`}
-                        onClick={() => handleCellTypeChange(cell.id, 'markdown')}
-                      >
-                        <AlignLeft className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    {cell.type === 'code' && (
-                      <button
-                        type="button"
-                        className="p-1 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
-                        onClick={() => executeCell(cell.id)}
-                      >
-                        {cell.isExecuting ? (
-                          <RefreshCw className="h-4 w-4 animate-spin text-primary-500" />
-                        ) : (
-                          <Play className="h-4 w-4" />
-                        )}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="p-1 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
-                      onClick={() => addCellAfter(cell.id)}
-                    >
-                      <PlusCircle className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      className="p-1 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
-                      onClick={() => deleteCell(cell.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
+                <div className={`absolute top-2 right-2 z-10 flex items-center space-x-1 bg-white bg-opacity-80 backdrop-blur-sm px-2 py-0.5 rounded-full border border-gray-200 transition-opacity duration-150 ${cell.isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                  <button onClick={(e) => { e.stopPropagation(); executeCell(cell.id); }} title="Run cell" className="p-1 text-gray-500 hover:text-primary-600 disabled:opacity-50" disabled={cell.type !== 'code' || cell.isExecuting}>
+                    {cell.isExecuting ? <RefreshCw className="h-4 w-4 animate-spin"/> : <Play className="h-4 w-4" />}
+                  </button>
+                   <button onClick={(e) => { e.stopPropagation(); handleCellTypeChange(cell.id, cell.type === 'code' ? 'markdown' : 'code'); }} title={`Convert to ${cell.type === 'code' ? 'Markdown' : 'Code'}`} className="p-1 text-gray-500 hover:text-primary-600">
+                     {cell.type === 'code' ? <FileText className="h-4 w-4" /> : <Code className="h-4 w-4" />}
+                  </button>
+                   <button onClick={(e) => { e.stopPropagation(); addCellAfter(cell.id, 'code'); }} title="Add code cell below" className="p-1 text-gray-500 hover:text-primary-600">
+                     <PlusCircle className="h-4 w-4" />
+                  </button>
+                   <button onClick={(e) => { e.stopPropagation(); deleteCell(cell.id); }} title="Delete cell" className="p-1 text-red-500 hover:text-red-700 disabled:opacity-50" disabled={cells.length <= 1}>
+                     <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
 
                 {/* Cell content */}
@@ -442,50 +456,29 @@ plt.show()`;
                   <ChevronRight className="h-5 w-5" />
                 </button>
               </div>
-              <div className="p-4">
-                <div className="mb-4">
-                  <label htmlFor="copilot-query" className="block text-sm font-medium text-gray-700 mb-1">
-                    Ask for help or suggestions
-                  </label>
-                  <div className="relative rounded-md shadow-sm">
-                    <input
-                      type="text"
-                      name="copilot-query"
-                      id="copilot-query"
-                      className="focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                      placeholder="E.g., Plot sales by region"
-                      value={copilotQuery}
-                      onChange={(e) => setCopilotQuery(e.target.value)}
-                    />
-                    <div className="absolute inset-y-0 right-0 flex py-1.5 pr-1.5">
-                      <button
-                        type="button"
-                        className="inline-flex items-center border border-transparent rounded px-2 text-sm font-medium text-primary-700 bg-primary-100 hover:bg-primary-200"
-                      >
-                        Ask
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
+              <div className="p-4 space-y-4 flex-1 overflow-y-auto">
                 <div>
                   <h4 className="text-xs font-medium text-gray-700 uppercase tracking-wider mb-2">
-                    Suggestions
+                    Code Suggestions
                   </h4>
-                  <ul className="space-y-2">
-                    {copilotSuggestions.map((suggestion, index) => (
-                      <li key={index}>
-                        <button
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-md"
-                          onClick={() => handleCopilotSuggestion(suggestion)}
-                        >
-                          {suggestion}
-                        </button>
-                      </li>
+                  <div className="space-y-2">
+                    {[
+                      'Plot sales by category using a bar chart',
+                      'Calculate correlation between value columns',
+                      'Show dataframe summary statistics',
+                      'Visualize data distribution with a histogram'
+                    ].map((suggestion: string, index: number) => (
+                      <button
+                        key={index}
+                        className="w-full text-left px-3 py-2 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-md disabled:opacity-70 disabled:cursor-not-allowed"
+                        onClick={() => handleCopilotSuggestion(suggestion)}
+                        disabled={loadingCopilotSuggestion}
+                      >
+                        {loadingCopilotSuggestion ? 'Generating...' : suggestion}
+                      </button>
                     ))}
-                  </ul>
+                  </div>
                 </div>
-
                 <div className="mt-6">
                   <h4 className="text-xs font-medium text-gray-700 uppercase tracking-wider mb-2">
                     Insights

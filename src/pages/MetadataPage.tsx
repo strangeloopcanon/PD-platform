@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { File, Edit2, Database, Table2, Eye, Download, Save, Plus } from 'lucide-react';
+import { File, Edit2, Database, Table2, Eye, Download, Save, Plus, Share2, X } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import toast, { Toaster } from 'react-hot-toast';
 
 interface TableMetadata {
   id: string;
@@ -30,6 +31,9 @@ const MetadataPage: React.FC = () => {
   const [editingDescription, setEditingDescription] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isEditing, setIsEditing] = useState(false);
+  const [showKgModal, setShowKgModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewData, setPreviewData] = useState<any[]>([]);
 
   // Mock data for demo purposes
   useEffect(() => {
@@ -121,6 +125,24 @@ const MetadataPage: React.FC = () => {
     table.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Mock handler for Preview Data button
+  const handlePreviewData = (table: TableMetadata | null) => {
+    if (!table) return;
+    // Generate very simple mock data based on table name or columns
+    const mockData = [
+      Object.fromEntries(table.columns.slice(0, 3).map(col => [col.name, `Sample ${col.name} 1`])),
+      Object.fromEntries(table.columns.slice(0, 3).map(col => [col.name, `Sample ${col.name} 2`])),
+      Object.fromEntries(table.columns.slice(0, 3).map(col => [col.name, `Sample ${col.name} 3`])),
+    ];
+    setPreviewData(mockData);
+    setShowPreviewModal(true);
+  };
+
+  // Mock handler for Export Metadata button
+  const handleExportMetadata = () => {
+    toast.success('Metadata export started... (Mock)');
+  };
+
   if (!connectionStatus) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -139,6 +161,7 @@ const MetadataPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <Toaster position="top-center" reverseOrder={false} />
       <div className="py-6">
         <div className="flex justify-between items-center">
           <div>
@@ -152,6 +175,7 @@ const MetadataPage: React.FC = () => {
               type="button"
               className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               onClick={() => setIsEditing(!isEditing)}
+              title={isEditing ? "Switch to View Mode" : "Switch to Edit Mode to modify descriptions"}
             >
               {isEditing ? (
                 <>
@@ -168,6 +192,15 @@ const MetadataPage: React.FC = () => {
             <button
               type="button"
               className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              onClick={() => setShowKgModal(true)}
+            >
+              <Share2 className="mr-2 h-4 w-4" />
+              Visualize Schema (KG)
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              onClick={handleExportMetadata}
             >
               <Download className="mr-2 h-4 w-4" />
               Export Metadata
@@ -186,6 +219,7 @@ const MetadataPage: React.FC = () => {
                   placeholder="Search tables"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  title="Search for tables by name"
                 />
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -203,6 +237,7 @@ const MetadataPage: React.FC = () => {
                         selectedTable?.id === table.id ? 'bg-primary-50' : ''
                       }`}
                       onClick={() => handleSelectTable(table.id)}
+                      title={`View details for ${table.name}`}
                     >
                       <Table2 className={`flex-shrink-0 h-5 w-5 ${selectedTable?.id === table.id ? 'text-primary-600' : 'text-gray-400'}`} />
                       <div className="ml-3 text-left">
@@ -241,6 +276,7 @@ const MetadataPage: React.FC = () => {
                       <button
                         type="button"
                         className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                        onClick={() => handlePreviewData(selectedTable)}
                       >
                         <Database className="mr-2 h-4 w-4 text-gray-500" />
                         Preview Data
@@ -346,6 +382,16 @@ const MetadataPage: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Added JSON representation section */}
+                <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Mock Schema JSON (Selected Table)</h3>
+                  <pre className="bg-white p-3 rounded-md text-xs text-gray-800 overflow-x-auto border border-gray-200 max-h-60">
+                    <code>
+                      {JSON.stringify(selectedTable, null, 2)}
+                    </code>
+                  </pre>
+                </div>
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -361,6 +407,101 @@ const MetadataPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Knowledge Graph Modal */}
+      {showKgModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl relative flex flex-col max-h-[90vh]">
+            <button 
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+              onClick={() => setShowKgModal(false)}
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Schema Knowledge Graph & JSON Representation (Mock)</h3>
+            <div className="grid grid-cols-2 gap-4 flex-1 overflow-hidden">
+              {/* Left side: Visual KG Placeholder */}
+              <div className="bg-gray-100 p-4 rounded flex justify-center items-center overflow-hidden">
+                <svg width="300" height="200" viewBox="0 0 300 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-400 w-full h-auto">
+                  <rect x="50" y="80" width="60" height="40" rx="4" stroke="currentColor" stroke-width="2" fill="white"/>
+                  <text x="80" y="105" text-anchor="middle" fill="currentColor" font-size="10">Table A</text>
+                  
+                  <rect x="190" y="80" width="60" height="40" rx="4" stroke="currentColor" stroke-width="2" fill="white"/>
+                  <text x="220" y="105" text-anchor="middle" fill="currentColor" font-size="10">Table B</text>
+
+                  <rect x="120" y="150" width="60" height="40" rx="4" stroke="currentColor" stroke-width="2" fill="white"/>
+                  <text x="150" y="175" text-anchor="middle" fill="currentColor" font-size="10">Table C</text>
+
+                  <line x1="110" y1="100" x2="190" y2="100" stroke="currentColor" stroke-width="1.5"/>
+                  <line x1="80" y1="120" x2="130" y2="150" stroke="currentColor" stroke-width="1.5"/>
+                  <line x1="220" y1="120" x2="170" y2="150" stroke="currentColor" stroke-width="1.5"/>
+                  
+                  <circle cx="110" cy="100" r="3" fill="currentColor"/>
+                  <circle cx="190" cy="100" r="3" fill="currentColor"/>
+                  <circle cx="80" cy="120" r="3" fill="currentColor"/>
+                  <circle cx="130" cy="150" r="3" fill="currentColor"/>
+                   <circle cx="220" cy="120" r="3" fill="currentColor"/>
+                  <circle cx="170" cy="150" r="3" fill="currentColor"/>
+
+                  <text x="150" y="30" text-anchor="middle" font-weight="bold" fill="currentColor" font-size="14">Mock Knowledge Graph</text>
+                </svg>
+              </div>
+              {/* Right side: JSON Representation of ALL tables */}
+              <div className="bg-gray-50 p-4 rounded overflow-y-auto border border-gray-200">
+                 <h4 className="text-sm font-medium text-gray-700 mb-2">Full Mock Schema JSON</h4>
+                 <pre className="bg-white p-3 rounded-md text-xs text-gray-800 border border-gray-200">
+                    <code>
+                      {JSON.stringify(tables, null, 2)} 
+                    </code>
+                  </pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preview Data Modal */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl relative">
+            <button 
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+              onClick={() => setShowPreviewModal(false)}
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Preview Data: {selectedTable?.name} (Mock)</h3>
+            {previewData.length > 0 ? (
+              <div className="overflow-x-auto max-h-[400px]">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      {Object.keys(previewData[0]).map((key) => (
+                        <th key={key} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          {key}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {previewData.map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {Object.values(row).map((value, colIndex) => (
+                          <td key={colIndex} className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">
+                            {String(value)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-gray-500">No preview data available.</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

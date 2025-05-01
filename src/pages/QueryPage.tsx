@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Code, Database, ArrowRight, RefreshCw, Download, Copy, CheckCircle2, AlertCircle, Send, MessageSquare, Lightbulb, ChevronRight, BookOpen } from 'lucide-react';
+import { Play, Code, Database, ArrowRight, RefreshCw, Download, Copy, CheckCircle2, AlertCircle, Send, MessageSquare, Lightbulb, ChevronRight, BookOpen, ChevronUp, ChevronDown, Filter, ChevronsLeft, ChevronsRight, BarChart3 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import Editor from '@monaco-editor/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import toast, { Toaster } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -18,6 +20,7 @@ interface ChatMessage {
 
 const QueryPage: React.FC = () => {
   const { connectionStatus, queryHistory, addQueryMessage, setSelectedDataFrame } = useAppContext();
+  const navigate = useNavigate();
   const [isExecuting, setIsExecuting] = useState(false);
   const [activeTab, setActiveTab] = useState<'pydough' | 'sql'>('pydough');
   const [currentMessage, setCurrentMessage] = useState('');
@@ -26,6 +29,7 @@ const QueryPage: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [loadingSuggestion, setLoadingSuggestion] = useState<string | null>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -135,6 +139,27 @@ The results show that Electronics is the top-performing category, followed by Ho
     }
   };
 
+  // Mock handler for Export Results
+  const handleExportResults = () => {
+    toast.success('Results export started... (Mock)');
+  };
+
+  // Mock handler for Analyze in Notebook
+  const handleAnalyzeInNotebook = (results: any[]) => {
+    setSelectedDataFrame(results); // Set results in context (implementation needed in context)
+    navigate('/notebook'); // Navigate to notebook page
+    toast.success('Sending results to Notebook... (Mock)');
+  };
+
+  // Handle clicking a suggestion
+  const handleSuggestionClick = (suggestion: string) => {
+    setLoadingSuggestion(suggestion);
+    setTimeout(() => {
+      setCurrentMessage(suggestion);
+      setLoadingSuggestion(null);
+    }, 300); // Short delay to show loading state
+  };
+
   if (!connectionStatus) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -153,6 +178,7 @@ The results show that Electronics is the top-performing category, followed by Ho
 
   return (
     <div className="h-[calc(100vh-7rem)] flex">
+      <Toaster position="top-center" reverseOrder={false} />
       {/* Main chat area */}
       <div className="flex-1 flex flex-col">
         {/* Chat messages */}
@@ -194,6 +220,7 @@ The results show that Electronics is the top-performing category, followed by Ho
                                   : 'text-gray-600 hover:bg-gray-100'
                               }`}
                               onClick={() => setActiveTab('pydough')}
+                              title="View generated PyDough code (Custom DSL)"
                             >
                               PyDough
                             </button>
@@ -204,6 +231,7 @@ The results show that Electronics is the top-performing category, followed by Ho
                                   : 'text-gray-600 hover:bg-gray-100'
                               }`}
                               onClick={() => setActiveTab('sql')}
+                              title="View generated SQL code"
                             >
                               SQL
                             </button>
@@ -239,40 +267,78 @@ The results show that Electronics is the top-performing category, followed by Ho
                     )}
                     
                     {message.results && (
-                      <div className="mt-4 bg-gray-50 rounded-md overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              {Object.keys(message.results[0]).map((key) => (
-                                <th
-                                  key={key}
-                                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                                >
-                                  {key}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {message.results.map((row, idx) => (
-                              <tr key={idx}>
-                                {Object.values(row).map((value, valueIdx) => (
-                                  <td
-                                    key={valueIdx}
-                                    className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                      <div className="mt-4">
+                        {/* Results Table Header Actions */}
+                        <div className="mb-2 flex justify-end space-x-2">
+                          <button
+                            className="inline-flex items-center px-2 py-1 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
+                            onClick={() => handleAnalyzeInNotebook(message.results!)}
+                            title="Send results to a new Notebook for analysis"
+                          >
+                            <BarChart3 className="h-3.5 w-3.5 mr-1" />
+                            Analyze in Notebook
+                          </button>
+                          <button
+                            className="inline-flex items-center px-2 py-1 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
+                            onClick={handleExportResults}
+                          >
+                            <Download className="h-3.5 w-3.5 mr-1" />
+                            Export Results
+                          </button>
+                        </div>
+                        <div className="bg-gray-50 rounded-md overflow-x-auto border border-gray-200">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                {Object.keys(message.results[0]).map((key) => (
+                                  <th
+                                    key={key}
+                                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider group cursor-pointer hover:bg-gray-100"
                                   >
-                                    {typeof value === 'number'
-                                      ? value.toLocaleString(undefined, {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2,
-                                        })
-                                      : String(value)}
-                                  </td>
+                                    <div className="flex items-center justify-between">
+                                      <span>{key}</span>
+                                      {/* Mock Sort/Filter Icons */}
+                                      <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                        <Filter className="h-3 w-3 inline text-gray-400 mr-1" />
+                                        <ChevronUp className="h-3 w-3 inline text-gray-400" />
+                                        {/* <ChevronDown className="h-3 w-3 inline text-gray-400" /> */}
+                                      </span>
+                                    </div>
+                                  </th>
                                 ))}
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {message.results.map((row, idx) => (
+                                <tr key={idx}>
+                                  {Object.values(row).map((value, valueIdx) => (
+                                    <td
+                                      key={valueIdx}
+                                      className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                                    >
+                                      {typeof value === 'number'
+                                        ? value.toLocaleString(undefined, {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2,
+                                          })
+                                        : String(value)}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {/* Mock Pagination Controls */}
+                        <div className="mt-2 flex items-center justify-between text-sm text-gray-600">
+                          <button className="inline-flex items-center px-2 py-1 border border-gray-300 rounded-md text-gray-500 bg-white hover:bg-gray-50 disabled:opacity-50" disabled>
+                            <ChevronsLeft className="h-4 w-4 mr-1" /> Previous
+                          </button>
+                          <span>Page 1 of 1 (Mock)</span>
+                          <button className="inline-flex items-center px-2 py-1 border border-gray-300 rounded-md text-gray-500 bg-white hover:bg-gray-50 disabled:opacity-50" disabled>
+                            Next <ChevronsRight className="h-4 w-4 ml-1" />
+                          </button>
+                        </div>
                       </div>
                     )}
                     
@@ -334,7 +400,7 @@ The results show that Electronics is the top-performing category, followed by Ho
       <div className={`border-l border-gray-200 bg-white ${copilotOpen ? 'w-80' : 'w-10'} transition-all duration-300 flex flex-col`}>
         {copilotOpen ? (
           <>
-            <div className="border-b border-gray-200 px-4 py-4 flex justify-between items-center">
+            <div className="border-b border-gray-200 px-4 py-4 flex justify-between items-center" title="AI assistant for query help and suggestions">
               <div className="flex items-center">
                 <Lightbulb className="h-5 w-5 text-amber-500 mr-2" />
                 <h3 className="text-sm font-medium text-gray-900">Query Assistant</h3>
@@ -347,7 +413,7 @@ The results show that Electronics is the top-performing category, followed by Ho
                 <ChevronRight className="h-5 w-5" />
               </button>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 flex-1 overflow-y-auto">
               <div>
                 <h4 className="text-xs font-medium text-gray-700 uppercase tracking-wider mb-2">
                   Suggested Queries
@@ -361,10 +427,11 @@ The results show that Electronics is the top-performing category, followed by Ho
                   ].map((suggestion, index) => (
                     <button
                       key={index}
-                      className="w-full text-left px-3 py-2 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-md"
-                      onClick={() => setCurrentMessage(suggestion)}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-md disabled:opacity-70 disabled:cursor-not-allowed"
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      disabled={loadingSuggestion === suggestion}
                     >
-                      {suggestion}
+                      {loadingSuggestion === suggestion ? 'Generating...' : suggestion}
                     </button>
                   ))}
                 </div>
@@ -415,6 +482,7 @@ The results show that Electronics is the top-performing category, followed by Ho
           <button
             className="flex items-center justify-center h-full w-full hover:bg-gray-50"
             onClick={() => setCopilotOpen(true)}
+            title="Open Query Assistant"
           >
             <Lightbulb className="h-5 w-5 text-amber-500" />
           </button>

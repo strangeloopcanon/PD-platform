@@ -4,11 +4,11 @@ import { Database, FileJson, Search, BarChart3, Home } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home },
-    { name: 'Connect', href: '/connect', icon: Database },
-    { name: 'Metadata', href: '/metadata', icon: FileJson },
-    { name: 'Query', href: '/query', icon: Search },
-    { name: 'Notebook', href: '/notebook', icon: BarChart3 },
+    { name: 'Dashboard', href: '/', icon: Home, description: 'Overview and main workflows' },
+    { name: 'Connect', href: '/connect', icon: Database, description: 'Connect to your Snowflake database' },
+    { name: 'Metadata', href: '/metadata', icon: FileJson, description: 'View and manage schema metadata' },
+    { name: 'Query', href: '/query', icon: Search, description: 'Query data using natural language' },
+    { name: 'Notebook', href: '/notebook', icon: BarChart3, description: 'Analyze data with code notebooks' },
   ];
 
   return (
@@ -26,6 +26,7 @@ const Sidebar: React.FC = () => {
                       : 'text-gray-900 hover:bg-gray-100'
                   }`
                 }
+                title={item.description}
               >
                 <item.icon className="w-6 h-6 text-gray-500 transition duration-75 group-hover:text-gray-900" />
                 <span className="ml-3">{item.name}</span>

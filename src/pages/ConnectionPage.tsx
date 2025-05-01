@@ -10,12 +10,12 @@ const ConnectionPage: React.FC = () => {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
-    accountName: '',
-    username: '',
-    password: '',
-    warehouse: '',
-    database: '',
-    schema: '',
+    accountName: 'mock-account-123',
+    username: 'mock_user',
+    password: 'mock_password',
+    warehouse: 'MOCK_WH',
+    database: 'MOCK_SALES_DB',
+    schema: 'PUBLIC',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
