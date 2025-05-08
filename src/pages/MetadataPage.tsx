@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { File, Edit2, Database, Table2, Eye, Download, Save, Plus, Share2, X } from 'lucide-react';
+import { File, Edit2, Database, Table2, Eye, Download, Save, Plus, Share2, X, Upload } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import toast, { Toaster } from 'react-hot-toast';
+import SchemaRecommendations from '../components/SchemaRecommendations';
+import ImportSemanticLayer from '../components/ImportSemanticLayer';
 
 interface TableMetadata {
   id: string;
@@ -34,6 +36,7 @@ const MetadataPage: React.FC = () => {
   const [showKgModal, setShowKgModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewData, setPreviewData] = useState<any[]>([]);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // Mock data for demo purposes
   useEffect(() => {
@@ -200,66 +203,88 @@ const MetadataPage: React.FC = () => {
             <button
               type="button"
               className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              onClick={handleExportMetadata}
+              onClick={() => setShowImportModal(true)}
             >
-              <Download className="mr-2 h-4 w-4" />
-              Export Metadata
+              <Upload className="mr-2 h-4 w-4" />
+              Import Semantic Layer
             </button>
           </div>
         </div>
 
-        <div className="mt-8 flex h-[calc(100vh-12rem)]">
-          {/* Left sidebar - Tables list */}
-          <div className="w-64 border-r border-gray-200 overflow-y-auto">
-            <div className="px-3 py-3 border-b border-gray-200">
-              <div className="relative">
-                <input
-                  type="text"
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                  placeholder="Search tables"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  title="Search for tables by name"
-                />
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                  </svg>
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white shadow overflow-hidden sm:rounded-md">
+              <div className="px-4 py-4 sm:px-6 flex justify-between items-center border-b border-gray-200">
+                <div className="flex items-center">
+                  <h3 className="text-base text-gray-900 font-medium flex items-center">
+                    <Database className="h-5 w-5 text-gray-500 mr-2" />
+                    Database Tables
+                  </h3>
+                  <input
+                    type="text"
+                    placeholder="Search tables..."
+                    className="ml-4 form-input block w-64 sm:text-sm border-gray-300 rounded-md"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  onClick={handleExportMetadata}
+                >
+                  <Download className="mr-1.5 h-4 w-4 text-gray-500" />
+                  Export Metadata
+                </button>
+              </div>
+
+              <div className="px-4 py-3 border-b border-gray-200">
+                <div className="relative">
+                  <input
+                    type="text"
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="Search tables"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    title="Search for tables by name"
+                  />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                    </svg>
+                  </div>
                 </div>
               </div>
+              <div className="overflow-y-auto h-full">
+                <ul className="divide-y divide-gray-200">
+                  {filteredTables.map((table) => (
+                    <li key={table.id}>
+                      <button
+                        className={`w-full px-3 py-3 flex items-start hover:bg-gray-50 focus:outline-none ${
+                          selectedTable?.id === table.id ? 'bg-primary-50' : ''
+                        }`}
+                        onClick={() => handleSelectTable(table.id)}
+                        title={`View details for ${table.name}`}
+                      >
+                        <Table2 className={`flex-shrink-0 h-5 w-5 ${selectedTable?.id === table.id ? 'text-primary-600' : 'text-gray-400'}`} />
+                        <div className="ml-3 text-left">
+                          <p className={`text-sm font-medium ${selectedTable?.id === table.id ? 'text-primary-600' : 'text-gray-900'}`}>
+                            {table.name}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1 truncate w-44">
+                            {table.description}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {table.columns.length} columns · {table.rowCount.toLocaleString()} rows
+                          </p>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
-            <div className="overflow-y-auto h-full">
-              <ul className="divide-y divide-gray-200">
-                {filteredTables.map((table) => (
-                  <li key={table.id}>
-                    <button
-                      className={`w-full px-3 py-3 flex items-start hover:bg-gray-50 focus:outline-none ${
-                        selectedTable?.id === table.id ? 'bg-primary-50' : ''
-                      }`}
-                      onClick={() => handleSelectTable(table.id)}
-                      title={`View details for ${table.name}`}
-                    >
-                      <Table2 className={`flex-shrink-0 h-5 w-5 ${selectedTable?.id === table.id ? 'text-primary-600' : 'text-gray-400'}`} />
-                      <div className="ml-3 text-left">
-                        <p className={`text-sm font-medium ${selectedTable?.id === table.id ? 'text-primary-600' : 'text-gray-900'}`}>
-                          {table.name}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1 truncate w-44">
-                          {table.description}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {table.columns.length} columns · {table.rowCount.toLocaleString()} rows
-                        </p>
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
 
-          {/* Main content - Selected table details */}
-          <div className="flex-1 overflow-hidden flex flex-col">
             {selectedTable ? (
               <>
                 <div className="px-6 py-4 border-b border-gray-200 bg-white">
@@ -405,8 +430,95 @@ const MetadataPage: React.FC = () => {
               </div>
             )}
           </div>
+
+          <div className="space-y-6">
+            <SchemaRecommendations />
+            
+            <div className="bg-white shadow overflow-hidden rounded-lg">
+              <div className="px-4 py-5 sm:px-6 bg-gray-50 border-b border-gray-200">
+                <h3 className="text-base leading-6 font-medium text-gray-900 flex items-center">
+                  <Table2 className="h-5 w-5 text-gray-500 mr-2" />
+                  Recently Edited Tables
+                </h3>
+              </div>
+              <div className="px-4 py-5 sm:p-6">
+                <ul className="divide-y divide-gray-200">
+                  {tables.filter(t => t.columns.some(c => c.isEdited)).slice(0, 3).map(table => (
+                    <li key={table.id} className="py-3 flex items-center justify-between">
+                      <div className="flex items-center">
+                        <span className="text-sm font-medium text-gray-900">{table.name}</span>
+                        <span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
+                          Updated
+                        </span>
+                      </div>
+                      <button
+                        className="text-sm text-primary-600 hover:text-primary-900"
+                        onClick={() => handleSelectTable(table.id)}
+                      >
+                        View
+                      </button>
+                    </li>
+                  ))}
+                  {tables.filter(t => t.columns.some(c => c.isEdited)).length === 0 && (
+                    <li className="py-4 text-center text-sm text-gray-500">
+                      No recently edited tables
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </div>
+            
+            <div className="bg-white shadow overflow-hidden rounded-lg">
+              <div className="px-4 py-5 sm:px-6 bg-gray-50 border-b border-gray-200">
+                <h3 className="text-base leading-6 font-medium text-gray-900 flex items-center">
+                  <Database className="h-5 w-5 text-gray-500 mr-2" />
+                  Database Overview
+                </h3>
+              </div>
+              <div className="px-4 py-5 sm:p-6">
+                <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                  <div className="bg-gray-50 px-4 py-5 sm:p-6 rounded-lg">
+                    <dt className="text-sm font-medium text-gray-500 truncate">Total Tables</dt>
+                    <dd className="mt-1 text-3xl font-semibold text-gray-900">{tables.length}</dd>
+                  </div>
+                  <div className="bg-gray-50 px-4 py-5 sm:p-6 rounded-lg">
+                    <dt className="text-sm font-medium text-gray-500 truncate">Total Fields</dt>
+                    <dd className="mt-1 text-3xl font-semibold text-gray-900">
+                      {tables.reduce((sum, table) => sum + table.columns.length, 0)}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Import Semantic Layer Modal */}
+      {showImportModal && (
+        <div className="fixed z-10 inset-0 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+              <div className="absolute top-0 right-0 pt-4 pr-4">
+                <button
+                  type="button"
+                  className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none"
+                  onClick={() => setShowImportModal(false)}
+                >
+                  <span className="sr-only">Close</span>
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <ImportSemanticLayer />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Knowledge Graph Modal */}
       {showKgModal && (
