@@ -1,10 +1,10 @@
-# Snowflake Analysis Platform
+# PD_Analysis Platform
 
-A modern web application for interacting with Snowflake databases using natural language queries, metadata management, and advanced analytics.
+A modern web application for interacting with databases using natural language queries, metadata management, and advanced analytics.
 
 ## Features
 
-- **Database Connection Management**: Connect to your Snowflake database securely
+- **Database Connection Management**: Connect to your database securely
 - **Metadata Management**: Convert database schema to metadata and customize field properties
 - **Natural Language Querying**: Transform natural language into PyDough and SQL
 - **Interactive Notebooks**: Analyze data with Jupyter-like notebooks with AI assistance
