@@ -1,0 +1,9 @@
+
+SQL Query:
+SELECT name, email FROM broker_customers
+
+Result:
+          name             email
+0     John Doe  john@example.com
+1   Jane Smith  jane@example.com
+2  Bob Johnson   bob@example.com

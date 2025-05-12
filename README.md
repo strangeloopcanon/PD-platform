@@ -1,73 +1,164 @@
-# PD_Analysis Platform
+# PyDough Platform
 
-A modern web application for interacting with databases using natural language queries, metadata management, and advanced analytics.
+A web interface for interacting with the PyDough query processor, which transforms natural language queries into PyDough code and SQL for database analysis.
 
 ## Features
 
-- **Database Connection Management**: Connect to your database securely
-- **Metadata Management**: Convert database schema to metadata and customize field properties
-- **Natural Language Querying**: Transform natural language into PyDough and SQL
-- **Interactive Notebooks**: Analyze data with Jupyter-like notebooks with AI assistance
-- **Modern UI**: Built with React and Tailwind CSS for a responsive experience
-
-## Tech Stack
-
-- **Frontend**: React 18, TypeScript, Tailwind CSS
-- **Routing**: React Router v6
-- **Code Editor**: Monaco Editor
-- **UI Components**: Custom components with Lucide React icons
-- **Build Tool**: Vite
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js (v16 or higher)
-- npm or yarn
-
-### Installation
-
-1. Clone the repository
-   ```bash
-   git clone [repository-url]
-   cd snowflake-analysis-platform
-   ```
-
-2. Install dependencies
-   ```bash
-   npm install
-   # or
-   yarn
-   ```
-
-3. Start the development server
-   ```bash
-   npm run dev
-   # or
-   yarn dev
-   ```
-
-4. Open your browser and navigate to `http://localhost:5173`
+- Connect to databases in multiple domains (Broker, Dealership, DermTreatment, Ewallet, TPCH)
+- Visualize database schema metadata
+- Process natural language queries to generate PyDough code and SQL
+- Execute generated code and view results
+- Save and manage query history
 
 ## Project Structure
 
-```
-src/
-  ├── components/      # Reusable UI components
-  ├── context/         # React context for state management
-  ├── pages/           # Application pages
-  │   ├── Dashboard.tsx         # Main dashboard
-  │   ├── ConnectionPage.tsx    # Database connection management
-  │   ├── MetadataPage.tsx      # Schema and metadata management
-  │   ├── QueryPage.tsx         # Natural language query interface
-  │   └── NotebookPage.tsx      # Notebook analysis interface
-  ├── App.tsx          # Main application component
-  └── main.tsx         # Application entry point
+- `src/` - React frontend
+  - `components/` - UI components
+  - `context/` - React context for application state
+  - `pages/` - Application pages
+- `text_to_pydough/` - Python backend and PyDough processor
+  - `data/` - Database files and metadata
+  - `app.py` - Flask API
+  - `pydough_query_processor.py` - Core PyDough processing functionality
+
+## Prerequisites
+
+- Node.js (v16+)
+- Python 3.9+
+- LLM API keys for Gemini (required for PyDough processor)
+- llm-gemini plugin for the llm package
+
+## Setup
+
+1. Clone the repository:
+   ```bash
+   git clone [repository-url]
+   cd PD-platform
+   ```
+
+2. Install frontend dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Set up the Python environment for the backend:
+   ```bash
+   cd text_to_pydough
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt  # This installs llm and llm-gemini plugins
+   ```
+
+4. Set up LLM API key for Gemini:
+   ```bash
+   llm keys set gemini
+   ```
+   Enter your API key when prompted.
+
+## Running the Application
+
+You can run both the frontend and backend using the provided start script:
+
+```bash
+./start.sh
 ```
 
-## Scripts
+This will:
+1. Start the Flask backend on port 5000
+2. Start the React development server on port 5173
+3. Open your browser to the application
 
-- `npm run dev` - Start the development server
-- `npm run build` - Build for production
-- `npm run lint` - Run ESLint
-- `npm run preview` - Preview the production build
+Alternatively, you can start them separately:
+
+**Backend:**
+```bash
+cd text_to_pydough
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+python app.py
+```
+
+**Frontend:**
+```bash
+npm run dev
+```
+
+## Using the Application
+
+1. **Connect to a Database**:
+   - Go to the Connect page
+   - Click "Connect" next to one of the available databases
+   
+2. **Explore Metadata**:
+   - View the schema structure on the Metadata page
+   - Browse tables and their fields
+   
+3. **Run Natural Language Queries**:
+   - Enter a query like "Show me all customers with transactions over $1000"
+   - View the generated PyDough code and SQL
+   - See the results in a tabular format
+   
+4. **Analyze Data**:
+   - Use the Notebook interface for more complex analysis
+   - Save queries and results for later reference
+
+## Development
+
+- **Add New Domains**:
+  - Add domain configurations to the `DOMAINS` dictionary in `pydough_query_processor.py`
+  - Place database files in the `text_to_pydough/data/` directory
+  
+- **Extending the API**:
+  - Add new endpoints to `app.py` in the `text_to_pydough/` directory
+  
+- **Frontend Components**:
+  - Follow the existing patterns in `src/components/` for new UI elements
+
+## License
+
+[Specify license information]
+
+## API Key Configuration
+
+The PyDough platform uses Google's Gemini API for processing natural language queries. You need to configure an API key in one of the following ways:
+
+### Option 1: Using a .env file (Recommended)
+
+1. Copy the template .env file:
+   ```bash
+   cp text_to_pydough/.env.example text_to_pydough/.env
+   ```
+
+2. Edit the .env file and replace `your_gemini_api_key_here` with your actual Gemini API key from [Google AI Studio](https://ai.google.dev/)
+
+3. Restart the application:
+   ```bash
+   ./start.sh
+   ```
+
+### Option 2: Using the web interface
+
+1. Start the application:
+   ```bash
+   ./start.sh
+   ```
+
+2. Navigate to the Query page
+3. Enter your Gemini API key in the form that appears
+4. Click "Set API Key"
+
+### Option 3: Using the command line
+
+1. Activate the virtual environment:
+   ```bash
+   cd text_to_pydough
+   source venv/bin/activate
+   ```
+
+2. Set the Gemini API key:
+   ```bash
+   llm keys set gemini
+   ```
+
+3. Enter your API key when prompted
+
+Note: You only need to set the API key once. It will be remembered for future sessions.

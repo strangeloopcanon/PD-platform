@@ -1,577 +1,739 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Play, Code, Database, ArrowRight, RefreshCw, Download, Copy, CheckCircle2, AlertCircle, Send, MessageSquare, Lightbulb, ChevronRight, BookOpen, ChevronUp, ChevronDown, Filter, ChevronsLeft, ChevronsRight, BarChart3, History } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ChevronRight, Play, Database, Save, Code, FileX, Download, CheckCircle, Key } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import Editor from '@monaco-editor/react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import toast, { Toaster } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
-import QueryHistory from '../components/QueryHistory';
-import ConversationVisualizer from '../components/ConversationVisualizer';
 
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  code?: {
-    pydough: string;
-    sql: string;
-  };
-  explanation?: string;
-  results?: any[];
-}
-
-const QueryPage: React.FC = () => {
-  const { connectionStatus, queryHistory, addQueryMessage, setSelectedDataFrame } = useAppContext();
-  const navigate = useNavigate();
-  const [isExecuting, setIsExecuting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'pydough' | 'sql'>('pydough');
-  const [currentMessage, setCurrentMessage] = useState('');
-  const [showExplanation, setShowExplanation] = useState(false);
-  const [copilotOpen, setCopilotOpen] = useState(true);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+// Add new ApiKeySetup component
+const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
+  const [apiKey, setApiKey] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [loadingSuggestion, setLoadingSuggestion] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<'chat' | 'conversation'>('chat');
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [queryHistory]);
-
-  const executeQuery = async (message: string) => {
-    if (!message.trim()) return;
-    
-    setIsExecuting(true);
+  const [success, setSuccess] = useState(false);
+  
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
     setError(null);
     
-    // Add user message
-    addQueryMessage({
-      role: 'user',
-      content: message,
-    });
-
-    // Simulate query processing
-    setTimeout(() => {
-      const mockPydoughCode = `
-from pydough import Table, Query
-
-customers = Table("CUSTOMERS")
-orders = Table("ORDERS")
-products = Table("PRODUCTS")
-
-query = (
-    Query()
-    .from_(orders)
-    .join(customers, orders.CUSTOMER_ID == customers.CUSTOMER_ID)
-    .join(products, orders.PRODUCT_ID == products.PRODUCT_ID)
-    .select([
-        products.CATEGORY.alias("category"),
-        Query.sum(orders.TOTAL_AMOUNT).alias("total_sales")
-    ])
-    .group_by(products.CATEGORY)
-    .order_by(Query.sum(orders.TOTAL_AMOUNT).desc())
-)`.trim();
-
-      const mockSqlCode = `
-SELECT 
-  products.CATEGORY as category,
-  SUM(orders.TOTAL_AMOUNT) as total_sales
-FROM 
-  ORDERS orders
-JOIN 
-  CUSTOMERS customers ON orders.CUSTOMER_ID = customers.CUSTOMER_ID
-JOIN 
-  PRODUCTS products ON orders.PRODUCT_ID = products.PRODUCT_ID
-GROUP BY 
-  products.CATEGORY
-ORDER BY 
-  SUM(orders.TOTAL_AMOUNT) DESC;`.trim();
-
-      const mockResults = [
-        { category: 'Electronics', total_sales: 527350.75 },
-        { category: 'Home & Kitchen', total_sales: 423150.25 },
-        { category: 'Clothing', total_sales: 356280.50 },
-      ];
-
-      const mockExplanation = `
-This query analyzes sales data by product category. Here's what it does:
-
-1. Joins three tables: ORDERS, CUSTOMERS, and PRODUCTS
-2. Groups the data by product category
-3. Calculates total sales for each category
-4. Orders the results by total sales in descending order
-
-The PyDough code uses our custom DSL to create a more readable and maintainable query structure, which is then automatically translated to SQL for execution.
-
-Key operations:
-- Table joins to connect related data
-- Aggregation using SUM()
-- Grouping by category
-- Sorting by total sales
-
-The results show that Electronics is the top-performing category, followed by Home & Kitchen and Clothing.
-`.trim();
-
-      addQueryMessage({
-        role: 'assistant',
-        content: 'I\'ve analyzed your request and generated the following query:',
-        code: {
-          pydough: mockPydoughCode,
-          sql: mockSqlCode,
+    try {
+      const response = await fetch('http://localhost:5001/api/api-key', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
         },
-        explanation: mockExplanation,
-        results: mockResults,
+        body: JSON.stringify({ api_key: apiKey })
       });
-
-      setIsExecuting(false);
-      setCurrentMessage('');
-      setSelectedDataFrame(mockResults);
-    }, 1500);
-  };
-
-  const copyToClipboard = (code: string, type: 'pydough' | 'sql') => {
-    navigator.clipboard.writeText(code);
-    setCopiedCode(type);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      executeQuery(currentMessage);
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          onKeySet();
+        }, 1500);
+      } else {
+        setError(data.error || 'Failed to set API key');
+      }
+    } catch (error) {
+      setError('Network error: Could not connect to server');
+    } finally {
+      setIsSubmitting(false);
     }
   };
-
-  // Mock handler for Export Results
-  const handleExportResults = () => {
-    toast.success('Results export started... (Mock)');
-  };
-
-  // Mock handler for Analyze in Notebook
-  const handleAnalyzeInNotebook = (results: any[]) => {
-    setSelectedDataFrame(results); // Set results in context (implementation needed in context)
-    navigate('/notebook'); // Navigate to notebook page
-    toast.success('Sending results to Notebook... (Mock)');
-  };
-
-  // Handle clicking a suggestion
-  const handleSuggestionClick = (suggestion: string) => {
-    setLoadingSuggestion(suggestion);
-    setTimeout(() => {
-      setCurrentMessage(suggestion);
-      setLoadingSuggestion(null);
-    }, 300); // Short delay to show loading state
-  };
-
-  if (!connectionStatus) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center">
-          <h2 className="text-xl font-medium text-gray-900">Database Connection Required</h2>
-          <p className="mt-2 text-sm text-gray-500">
-            Please connect to a Snowflake database before using the query interface
-          </p>
-          <a href="/connect" className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700">
-            Connect to Database
-          </a>
-        </div>
-      </div>
-    );
-  }
-
+  
   return (
-    <div className="h-[calc(100vh-7rem)] flex">
-      <Toaster position="top-center" reverseOrder={false} />
+    <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-6 mb-6">
+      <h2 className="text-lg font-medium text-yellow-800 flex items-center">
+        <Key className="h-5 w-5 mr-2" />
+        Gemini API Key Required
+      </h2>
       
-      {/* Left sidebar with query history */}
-      <div className="w-80 border-r border-gray-200 h-full overflow-y-auto bg-gray-50 p-4 hidden lg:block">
-        <QueryHistory />
-      </div>
+      <p className="mt-2 text-sm text-yellow-700">
+        The application needs a Gemini API key to process natural language queries.
+        You can get a key from <a href="https://ai.google.dev/" target="_blank" rel="noopener noreferrer" className="underline">Google AI Studio</a>.
+      </p>
       
-      {/* Main chat area */}
-      <div className="flex-1 flex flex-col">
-        {/* Tab selector for different views */}
-        <div className="border-b border-gray-200 bg-white">
-          <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
-            <button
-              onClick={() => setActiveView('chat')}
-              className={`${
-                activeView === 'chat'
-                  ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
-            >
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Chat
-            </button>
-            <button
-              onClick={() => setActiveView('conversation')}
-              className={`${
-                activeView === 'conversation'
-                  ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
-            >
-              <History className="mr-2 h-4 w-4" />
-              Conversation History
-            </button>
-          </nav>
-        </div>
-        
-        {activeView === 'chat' ? (
-          <>
-            {/* Chat messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-6">
-              <div className="max-w-4xl mx-auto space-y-6">
-                {queryHistory.length === 0 ? (
-                  <div className="text-center py-12">
-                    <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">No messages</h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Start by asking a question about your data
-                    </p>
-                  </div>
-                ) : (
-                  queryHistory.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${
-                        message.role === 'user' ? 'justify-end' : 'justify-start'
-                      }`}
-                    >
-                      <div
-                        className={`rounded-lg px-4 py-2 max-w-3xl ${
-                          message.role === 'user'
-                            ? 'bg-primary-600 text-white'
-                            : 'bg-white shadow-sm border border-gray-200'
-                        }`}
-                      >
-                        <div className="text-sm">{message.content}</div>
-                        
-                        {message.code && (
-                          <div className="mt-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex space-x-2">
-                                <button
-                                  className={`px-2 py-1 text-xs rounded ${
-                                    activeTab === 'pydough'
-                                      ? 'bg-gray-200 text-gray-800'
-                                      : 'text-gray-600 hover:bg-gray-100'
-                                  }`}
-                                  onClick={() => setActiveTab('pydough')}
-                                  title="View generated PyDough code (Custom DSL)"
-                                >
-                                  PyDough
-                                </button>
-                                <button
-                                  className={`px-2 py-1 text-xs rounded ${
-                                    activeTab === 'sql'
-                                      ? 'bg-gray-200 text-gray-800'
-                                      : 'text-gray-600 hover:bg-gray-100'
-                                  }`}
-                                  onClick={() => setActiveTab('sql')}
-                                  title="View generated SQL code"
-                                >
-                                  SQL
-                                </button>
-                              </div>
-                              <button
-                                className="p-1 text-gray-400 hover:text-gray-600"
-                                onClick={() => copyToClipboard(
-                                  activeTab === 'pydough' ? message.code!.pydough : message.code!.sql,
-                                  activeTab
-                                )}
-                              >
-                                {copiedCode === activeTab ? (
-                                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                ) : (
-                                  <Copy className="h-4 w-4" />
-                                )}
-                              </button>
-                            </div>
-                            <div className="relative">
-                              <Editor
-                                height="200px"
-                                language={activeTab === 'pydough' ? 'python' : 'sql'}
-                                value={activeTab === 'pydough' ? message.code.pydough : message.code.sql}
-                                options={{
-                                  readOnly: true,
-                                  minimap: { enabled: false },
-                                  scrollBeyondLastLine: false,
-                                  fontSize: 12,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                        
-                        {message.results && (
-                          <div className="mt-4">
-                            {/* Results Table Header Actions */}
-                            <div className="mb-2 flex justify-end space-x-2">
-                              <button
-                                className="inline-flex items-center px-2 py-1 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
-                                onClick={() => handleAnalyzeInNotebook(message.results!)}
-                                title="Send results to a new Notebook for analysis"
-                              >
-                                <BarChart3 className="h-3.5 w-3.5 mr-1" />
-                                Analyze in Notebook
-                              </button>
-                              <button
-                                className="inline-flex items-center px-2 py-1 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
-                                onClick={handleExportResults}
-                              >
-                                <Download className="h-3.5 w-3.5 mr-1" />
-                                Export Results
-                              </button>
-                            </div>
-                            <div className="bg-gray-50 rounded-md overflow-x-auto border border-gray-200">
-                              <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                  <tr>
-                                    {Object.keys(message.results[0]).map((key) => (
-                                      <th
-                                        key={key}
-                                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider group cursor-pointer hover:bg-gray-100"
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <span>{key}</span>
-                                          {/* Mock Sort/Filter Icons */}
-                                          <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                            <Filter className="h-3 w-3 inline text-gray-400 mr-1" />
-                                            <ChevronUp className="h-3 w-3 inline text-gray-400" />
-                                            {/* <ChevronDown className="h-3 w-3 inline text-gray-400" /> */}
-                                          </span>
-                                        </div>
-                                      </th>
-                                    ))}
-                                  </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                  {message.results.map((row, idx) => (
-                                    <tr key={idx}>
-                                      {Object.values(row).map((value, valueIdx) => (
-                                        <td
-                                          key={valueIdx}
-                                          className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
-                                        >
-                                          {typeof value === 'number'
-                                            ? value.toLocaleString(undefined, {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
-                                              })
-                                            : String(value)}
-                                        </td>
-                                      ))}
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                            {/* Mock Pagination Controls */}
-                            <div className="mt-2 flex items-center justify-between text-sm text-gray-600">
-                              <button className="inline-flex items-center px-2 py-1 border border-gray-300 rounded-md text-gray-500 bg-white hover:bg-gray-50 disabled:opacity-50" disabled>
-                                <ChevronsLeft className="h-4 w-4 mr-1" /> Previous
-                              </button>
-                              <span>Page 1 of 1 (Mock)</span>
-                              <button className="inline-flex items-center px-2 py-1 border border-gray-300 rounded-md text-gray-500 bg-white hover:bg-gray-50 disabled:opacity-50" disabled>
-                                Next <ChevronsRight className="h-4 w-4 ml-1" />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {message.explanation && (
-                          <div className="mt-4">
-                            <button
-                              className="inline-flex items-center text-xs text-gray-500 hover:text-gray-700"
-                              onClick={() => setShowExplanation(!showExplanation)}
-                            >
-                              <BookOpen className="h-4 w-4 mr-1" />
-                              {showExplanation ? 'Hide' : 'Show'} Explanation
-                            </button>
-                            {showExplanation && (
-                              <div className="mt-2 text-sm text-gray-600 bg-gray-50 rounded-md p-4">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                  {message.explanation}
-                                </ReactMarkdown>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-                <div ref={chatEndRef} />
-              </div>
-            </div>
-
-            {/* Query input */}
-            <div className="border-t border-gray-200 py-4 px-4 bg-white">
-              <div className="max-w-4xl mx-auto">
-                <form className="relative">
-                  <div className="border border-gray-300 rounded-lg shadow-sm overflow-hidden focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
-                    <textarea
-                      rows={3}
-                      name="query"
-                      id="query"
-                      className="block w-full py-3 px-4 border-0 resize-none focus:ring-0 sm:text-sm"
-                      placeholder="Ask a question about your data..."
-                      value={currentMessage}
-                      onChange={(e) => setCurrentMessage(e.target.value)}
-                      onKeyDown={handleKeyPress}
-                      disabled={isExecuting}
-                    />
-                  </div>
-                  <div className="absolute inset-x-0 bottom-0 flex justify-between py-2 pl-3 pr-2">
-                    <div className="flex items-center space-x-5">
-                      {error && (
-                        <div className="text-red-500 text-xs flex items-center">
-                          <AlertCircle className="h-4 w-4 mr-1" />
-                          {error}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <button
-                        type="button"
-                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                        onClick={() => executeQuery(currentMessage)}
-                        disabled={isExecuting || !currentMessage.trim()}
-                      >
-                        {isExecuting ? (
-                          <>
-                            <RefreshCw className="animate-spin -ml-1 mr-2 h-4 w-4" />
-                            Processing
-                          </>
-                        ) : (
-                          <>
-                            <Send className="-ml-1 mr-2 h-4 w-4" />
-                            Send
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </form>
-
-                {/* Query suggestions */}
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium text-gray-500 flex items-center">
-                    <Lightbulb className="h-4 w-4 mr-1 text-amber-500" />
-                    Query Suggestions
-                  </h4>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {[
-                      "What were the top 5 selling products last month?",
-                      "Show me customer retention rate by month",
-                      "Compare sales by region for the last 4 quarters",
-                      "Which product categories are growing the fastest?",
-                      "Show me trends in customer acquisition cost"
-                    ].map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        className={`text-xs px-2.5 py-1.5 rounded-full border border-gray-300 bg-white hover:bg-gray-50 ${
-                          loadingSuggestion === suggestion ? 'animate-pulse bg-gray-100' : ''
-                        }`}
-                        onClick={() => handleSuggestionClick(suggestion)}
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="p-6 flex-1 overflow-y-auto">
-            <ConversationVisualizer />
-          </div>
-        )}
-      </div>
-
-      {/* Right sidebar with copilot */}
-      <div className="w-96 border-l border-gray-200 h-full overflow-y-auto bg-gray-50 hidden xl:block">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-          <h3 className="text-sm font-medium text-gray-900 flex items-center">
-            <Lightbulb className="h-4 w-4 mr-1.5 text-amber-500" />
-            SQL Copilot
-          </h3>
+      <form onSubmit={handleSubmit} className="mt-4">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="Enter your Gemini API key"
+            className="flex-1 px-3 py-2 border border-yellow-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500"
+            required
+          />
+          
           <button
-            onClick={() => setCopilotOpen(!copilotOpen)}
-            className="text-gray-400 hover:text-gray-500"
+            type="submit"
+            disabled={isSubmitting || !apiKey.trim() || success}
+            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50"
           >
-            {copilotOpen ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+            {isSubmitting ? 'Setting Key...' : success ? 'Key Set!' : 'Set API Key'}
           </button>
         </div>
         
-        {copilotOpen && (
-          <div className="p-4">
-            <div className="bg-amber-50 rounded-lg border border-amber-100 p-4 mb-4">
-              <h4 className="text-sm font-medium text-amber-800 flex items-center">
-                <Lightbulb className="h-4 w-4 mr-1.5" />
-                SQL Tip
-              </h4>
-              <p className="mt-1 text-xs text-amber-700">
-                When analyzing time-based data, consider using the OVER clause with PARTITION BY to create 
-                running totals or moving averages without complex self-joins.
-              </p>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Related Schemas</h4>
-                <ul className="mt-2 divide-y divide-gray-200">
-                  {['ORDERS', 'CUSTOMERS', 'PRODUCTS'].map((table) => (
-                    <li key={table} className="py-2">
-                      <button className="flex items-center text-sm text-gray-800 hover:text-primary-600">
-                        <Database className="h-4 w-4 mr-1.5 text-gray-400" />
-                        {table}
-                        <ChevronRight className="ml-auto h-4 w-4 text-gray-400" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              
-              <div>
-                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Common Functions</h4>
-                <ul className="mt-2 grid grid-cols-2 gap-2">
-                  {['SUM()', 'AVG()', 'COUNT()', 'GROUP BY', 'ORDER BY', 'HAVING'].map((func) => (
-                    <li key={func}>
-                      <button className="text-xs px-2 py-1 bg-white border border-gray-200 rounded hover:bg-gray-50 text-gray-800">
-                        {func}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              
-              <div>
-                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Resources</h4>
-                <ul className="mt-2 space-y-2">
-                  <li>
-                    <a href="#" className="flex items-center text-xs text-primary-600 hover:text-primary-700">
-                      <BookOpen className="h-3 w-3 mr-1" />
-                      SQL Best Practices Guide
-                    </a>
-                  </li>
-                  <li>
-                    <a href="#" className="flex items-center text-xs text-primary-600 hover:text-primary-700">
-                      <BookOpen className="h-3 w-3 mr-1" />
-                      Snowflake Function Reference
-                    </a>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
+        {error && (
+          <p className="mt-2 text-sm text-red-600">{error}</p>
         )}
+        
+        {success && (
+          <p className="mt-2 text-sm text-green-600 flex items-center">
+            <CheckCircle className="h-4 w-4 mr-1" />
+            API key set successfully! You can now use natural language queries.
+          </p>
+        )}
+      </form>
+      
+      <div className="mt-4 text-xs text-yellow-600 bg-yellow-100 p-3 rounded">
+        <p className="font-medium">Alternative Setup Methods:</p>
+        
+        <div className="mt-2">
+          <p className="font-medium">Option 1: Using a .env file (recommended)</p>
+          <code className="block mt-1 font-mono">
+            # Create a file named .env in the text_to_pydough/ directory<br />
+            GEMINI_API_KEY=your_api_key_here
+          </code>
+          <p className="mt-1 text-xs">Then restart the application with ./start.sh</p>
+        </div>
+        
+        <div className="mt-2">
+          <p className="font-medium">Option 2: Using the terminal</p>
+          <code className="block mt-1 font-mono">
+            cd text_to_pydough<br />
+            source venv/bin/activate<br />
+            llm keys set gemini
+          </code>
+        </div>
       </div>
     </div>
   );
 };
 
-export default QueryPage;
+const QueryPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { 
+    connectionStatus, 
+    currentQuery, 
+    setCurrentQuery,
+    processQuery,
+    queryResults,
+    availableDatabases,
+    detectedDomain,
+    setDetectedDomain,
+    generatedCode,
+    generatedSQL,
+    executeCode,
+    addHistoryItem,
+    isLoading,
+    error,
+    setError
+  } = useAppContext();
+  
+  const [processingError, setProcessingError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'results' | 'code' | 'sql'>('results');
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+  const [needsApiKey, setNeedsApiKey] = useState(false);
+  
+  // Redirect if not connected
+  useEffect(() => {
+    if (!connectionStatus) {
+      navigate('/connect');
+    }
+  }, [connectionStatus, navigate]);
+  
+  // Set selectedDomain when detectedDomain changes
+  useEffect(() => {
+    if (detectedDomain) {
+      setSelectedDomain(detectedDomain);
+    }
+  }, [detectedDomain]);
+  
+  // Update processingError when global error changes
+  useEffect(() => {
+    if (error) {
+      setProcessingError(error);
+    }
+  }, [error]);
+  
+  // Check if API key is configured
+  useEffect(() => {
+    const checkApiStatus = async () => {
+      try {
+        const response = await fetch('http://localhost:5001/api/status');
+        const data = await response.json();
+        
+        if (data.success && !data.llm_api_configured) {
+          setNeedsApiKey(true);
+          if (data.llm_error) {
+            setProcessingError(data.llm_error);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check API status:', error);
+      }
+    };
+    
+    checkApiStatus();
+  }, []);
+  
+  // Handle query submission
+  const handleSubmitQuery = async () => {
+    if (!currentQuery.trim()) return;
+    
+    setProcessingError(null);
+    setError(null);
+    
+    try {
+      // Always pass null for domain to ensure auto-detection
+      const queryResult = await processQuery(currentQuery, null);
+      
+      // If we got valid PyDough code, automatically execute it
+      if (queryResult?.pydoughCode) {
+        console.log("Automatically executing generated PyDough code...");
+        try {
+          await executeCode(queryResult.pydoughCode);
+        } catch (execError) {
+          console.error("Error during auto-execution:", execError);
+          // Don't set processing error here since we at least got the code generated
+        }
+      }
+      
+      setActiveTab('results');
+    } catch (error) {
+      setProcessingError(`Error processing query: ${error}`);
+      console.error('Query processing error:', error);
+    }
+  };
+  
+  // Handle manual code execution
+  const handleExecuteCode = async () => {
+    if (!generatedCode) return;
+    
+    setProcessingError(null);
+    setError(null);
+    
+    try {
+      await executeCode(generatedCode);
+      setActiveTab('results');
+    } catch (error) {
+      setProcessingError(`Error executing code: ${error}`);
+      console.error('Code execution error:', error);
+    }
+  };
+  
+  // Handle saving to favorites
+  const handleSaveFavorite = () => {
+    if (!currentQuery.trim()) return;
+    
+    addHistoryItem({
+      query: currentQuery,
+      result: queryResults,
+      favorite: true,
+      tags: ['favorite'],
+      domain: detectedDomain || undefined,
+      pydoughCode: generatedCode || undefined,
+      sql: generatedSQL || undefined
+    });
+    
+    // Show a temporary success message
+    const actionMessage = document.getElementById('action-message');
+    if (actionMessage) {
+      actionMessage.classList.remove('opacity-0');
+      actionMessage.classList.add('opacity-100');
+      
+      setTimeout(() => {
+        actionMessage.classList.remove('opacity-100');
+        actionMessage.classList.add('opacity-0');
+      }, 2000);
+    }
+  };
+  
+  // Format the results data for display
+  const formatResults = () => {
+    if (!queryResults) return null;
+    
+    if (Array.isArray(queryResults)) {
+      return (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                {queryResults.length > 0 && Object.keys(queryResults[0]).map((key) => (
+                  <th 
+                    key={key}
+                    scope="col" 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    {key}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {queryResults.map((row, idx) => (
+                <tr key={idx}>
+                  {Object.values(row).map((value, idx) => (
+                    <td key={idx} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+    
+    // If not an array, show as JSON
+    return (
+      <pre className="bg-gray-50 p-4 rounded-md text-sm overflow-auto">
+        {JSON.stringify(queryResults, null, 2)}
+      </pre>
+    );
+  };
+  
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <h1 className="text-2xl font-semibold text-gray-900">Natural Language Query</h1>
+      <p className="mt-2 text-sm text-gray-700">
+        Ask questions about your data in plain English
+      </p>
+      
+      {/* Show API key setup if needed */}
+      {needsApiKey && (
+        <ApiKeySetup onKeySet={() => setNeedsApiKey(false)} />
+      )}
+      
+      {/* Update the error message if it still shows up */}
+      {processingError && (processingError.includes("gemini-2.5-pro-preview-05-06") || processingError.includes("gemini-2.0-flash")) && (
+        <div className="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <Key className="h-5 w-5 text-yellow-400" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-yellow-700">
+                <strong>Gemini API Key Information:</strong><br/>
+                This application uses two Gemini models for different purposes:<br/>
+                - <strong>gemini-2.5-pro-preview-05-06</strong>: Used for generating PyDough code (complex queries)<br/>
+                - <strong>gemini-2.0-flash</strong>: Used for domain detection and simpler tasks<br/><br/>
+                Please ensure your API key has access to both models for full functionality.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <div className="mt-6">
+        <div className="flex flex-col md:flex-row md:items-center md:space-x-4">
+          <div className="relative flex-1">
+            <div className="flex rounded-md shadow-sm">
+              <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
+                <ChevronRight className="h-5 w-5" />
+              </span>
+              <input
+                type="text"
+                value={currentQuery}
+                onChange={(e) => setCurrentQuery(e.target.value)}
+                placeholder="Enter your query in natural language (e.g., 'Show me top customers by order value')"
+                className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                onKeyPress={(e) => e.key === 'Enter' && handleSubmitQuery()}
+              />
+            </div>
+            
+            <div id="action-message" className="absolute mt-2 text-sm text-green-600 opacity-0 transition-opacity duration-300 flex items-center">
+              <CheckCircle className="h-4 w-4 mr-1" />
+              Query saved to favorites
+            </div>
+          </div>
+          
+          <div className="mt-2 md:mt-0 flex-shrink-0">
+            <div className="flex items-center space-x-2">
+              {/* Domain selector dropdown removed - using auto-detection */}
+              
+              <button
+                type="button"
+                onClick={handleSubmitQuery}
+                disabled={isLoading || !currentQuery.trim()}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Run Query
+                  </>
+                )}
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleSaveFavorite}
+                disabled={!currentQuery.trim()}
+                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Add note about automatic domain detection */}
+        <div className="mt-2 text-xs text-gray-500 italic">
+          The system will automatically detect the most appropriate database domain for your query.
+          {detectedDomain && (
+            <span className="ml-1 text-primary-600 font-medium">
+              Current domain: <span className="text-primary-700">{detectedDomain}</span>
+            </span>
+          )}
+        </div>
+      </div>
+      
+      {processingError && (
+        <div className="mt-4 bg-red-50 border-l-4 border-red-400 p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <FileX className="h-5 w-5 text-red-400" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">
+                {processingError}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {(queryResults || generatedCode || generatedSQL) && (
+        <div className="mt-6">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex">
+              <button
+                onClick={() => setActiveTab('results')}
+                className={`${
+                  activeTab === 'results'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm mr-8`}
+              >
+                Results
+              </button>
+              <button
+                onClick={() => setActiveTab('code')}
+                className={`${
+                  activeTab === 'code'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm mr-8`}
+              >
+                PyDough Code
+              </button>
+              <button
+                onClick={() => setActiveTab('sql')}
+                className={`${
+                  activeTab === 'sql'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                SQL
+              </button>
+            </nav>
+          </div>
+          
+          <div className="mt-4">
+            {activeTab === 'results' && (
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-medium text-gray-900">
+                    Query Results
+                    {detectedDomain && (
+                      <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <Database className="h-3 w-3 mr-1" />
+                        {detectedDomain}
+                      </span>
+                    )}
+                  </h2>
+                  
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    disabled={!queryResults}
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1" />
+                    Export
+                  </button>
+                </div>
+                
+                {queryResults ? (
+                  formatResults()
+                ) : (
+                  <p className="text-gray-500 italic">No results to display</p>
+                )}
+              </div>
+            )}
+            
+            {activeTab === 'code' && (
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-medium text-gray-900">PyDough Code</h2>
+                  
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={handleExecuteCode}
+                      disabled={isLoading || !generatedCode}
+                      className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-xs font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isLoading ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Executing...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3.5 w-3.5 mr-1" />
+                          Execute
+                        </>
+                      )}
+                    </button>
+                    
+                    <button
+                      type="button"
+                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      disabled={!generatedCode}
+                    >
+                      <Code className="h-3.5 w-3.5 mr-1" />
+                      Copy
+                    </button>
+                  </div>
+                </div>
+                
+                {generatedCode ? (
+                  <div className="border border-gray-300 rounded-md overflow-hidden">
+                    <Editor
+                      height="300px"
+                      language="python"
+                      value={generatedCode}
+                      options={{
+                        readOnly: false,
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <p className="text-gray-500 italic">No code to display</p>
+                )}
+              </div>
+            )}
+            
+            {activeTab === 'sql' && (
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-medium text-gray-900">Generated SQL</h2>
+                  
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    disabled={!generatedSQL}
+                  >
+                    <Code className="h-3.5 w-3.5 mr-1" />
+                    Copy
+                  </button>
+                </div>
+                
+                {generatedSQL ? (
+                  <div className="border border-gray-300 rounded-md overflow-hidden">
+                    <Editor
+                      height="200px"
+                      language="sql"
+                      value={generatedSQL}
+                      options={{
+                        readOnly: true,
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <p className="text-gray-500 italic">No SQL to display</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      <div className="mt-8 bg-white shadow sm:rounded-md p-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Sample Queries</h2>
+        
+        <div className="bg-gray-50 p-4 rounded-md">
+          <p className="text-sm text-gray-600 mb-4">
+            Try these sample queries to get started:
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {detectedDomain && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-900 mb-2">For {detectedDomain}:</h3>
+                <ul className="space-y-2">
+                  {detectedDomain === 'Broker' && (
+                    <>
+                      <li>
+                        <button 
+                          onClick={() => setCurrentQuery("List all customers and their email addresses")}
+                          className="text-left text-sm text-primary-600 hover:text-primary-500"
+                        >
+                          List all customers and their email addresses
+                        </button>
+                      </li>
+                      <li>
+                        <button 
+                          onClick={() => setCurrentQuery("Show me the top 5 stocks by trading volume")}
+                          className="text-left text-sm text-primary-600 hover:text-primary-500"
+                        >
+                          Show me the top 5 stocks by trading volume
+                        </button>
+                      </li>
+                    </>
+                  )}
+                  
+                  {detectedDomain === 'Dealership' && (
+                    <>
+                      <li>
+                        <button 
+                          onClick={() => setCurrentQuery("List all car models with their prices")}
+                          className="text-left text-sm text-primary-600 hover:text-primary-500"
+                        >
+                          List all car models with their prices
+                        </button>
+                      </li>
+                      <li>
+                        <button 
+                          onClick={() => setCurrentQuery("Show top 5 salespeople by revenue")}
+                          className="text-left text-sm text-primary-600 hover:text-primary-500"
+                        >
+                          Show top 5 salespeople by revenue
+                        </button>
+                      </li>
+                    </>
+                  )}
+                  
+                  {detectedDomain === 'DermTreatment' && (
+                    <>
+                      <li>
+                        <button 
+                          onClick={() => setCurrentQuery("List all doctors and their specialties")}
+                          className="text-left text-sm text-primary-600 hover:text-primary-500"
+                        >
+                          List all doctors and their specialties
+                        </button>
+                      </li>
+                      <li>
+                        <button 
+                          onClick={() => setCurrentQuery("Show most common patient diagnoses")}
+                          className="text-left text-sm text-primary-600 hover:text-primary-500"
+                        >
+                          Show most common patient diagnoses
+                        </button>
+                      </li>
+                    </>
+                  )}
+                  
+                  {detectedDomain === 'Ewallet' && (
+                    <>
+                      <li>
+                        <button 
+                          onClick={() => setCurrentQuery("Show me all transactions over $1000")}
+                          className="text-left text-sm text-primary-600 hover:text-primary-500"
+                        >
+                          Show me all transactions over $1000
+                        </button>
+                      </li>
+                      <li>
+                        <button 
+                          onClick={() => setCurrentQuery("List users with highest wallet balance")}
+                          className="text-left text-sm text-primary-600 hover:text-primary-500"
+                        >
+                          List users with highest wallet balance
+                        </button>
+                      </li>
+                    </>
+                  )}
+                  
+                  {detectedDomain === 'TPCH' && (
+                    <>
+                      <li>
+                        <button 
+                          onClick={() => setCurrentQuery("List all suppliers and their regions")}
+                          className="text-left text-sm text-primary-600 hover:text-primary-500"
+                        >
+                          List all suppliers and their regions
+                        </button>
+                      </li>
+                      <li>
+                        <button 
+                          onClick={() => setCurrentQuery("Show orders with highest line item count")}
+                          className="text-left text-sm text-primary-600 hover:text-primary-500"
+                        >
+                          Show orders with highest line item count
+                        </button>
+                      </li>
+                    </>
+                  )}
+                </ul>
+              </div>
+            )}
+            
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-2">General Queries:</h3>
+              <ul className="space-y-2">
+                <li>
+                  <button 
+                    onClick={() => setCurrentQuery("Show me the total count of records in each table")}
+                    className="text-left text-sm text-primary-600 hover:text-primary-500"
+                  >
+                    Show me the total count of records in each table
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    onClick={() => setCurrentQuery("What is the most recent transaction in the database?")}
+                    className="text-left text-sm text-primary-600 hover:text-primary-500"
+                  >
+                    What is the most recent transaction in the database?
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    onClick={() => setCurrentQuery("Create a summary report of key metrics")}
+                    className="text-left text-sm text-primary-600 hover:text-primary-500"
+                  >
+                    Create a summary report of key metrics
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default QueryPage; 

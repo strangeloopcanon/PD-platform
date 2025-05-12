@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/Users/rohit/Library/CloudStorage/OneDrive-Personal/Coding_Analysis/PD-platform/text_to_pydough/results/query_20250510_003646.py", line 2, in <module>
+    import pydough
+ModuleNotFoundError: No module named 'pydough'
