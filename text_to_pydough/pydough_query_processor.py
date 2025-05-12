@@ -18,17 +18,20 @@ import subprocess
 import argparse
 from datetime import datetime
 from tqdm import tqdm
-from typing import Optional, List
+from typing import Optional, List, Dict
+import sys # Add sys import
 
 # Make sure llm package and pydantic are installed
 try:
     import llm
     from pydantic import BaseModel
+    import pydough
 except ImportError:
     print("Installing required packages...")
-    subprocess.run(["pip", "install", "llm", "llm-gemini", "pandas", "tqdm", "pydantic"], check=True)
+    subprocess.run(["pip", "install", "llm", "llm-gemini", "pandas", "tqdm", "pydantic", "pydough"], check=True)
     import llm
     from pydantic import BaseModel
+    import pydough
 
 # Define Pydantic model for structured LLM output
 class PyDoughResponse(BaseModel):
@@ -436,20 +439,20 @@ print(pydough.to_df(result).head(10))  # Show only first 10 rows
     return adapted_code, output_file_path # Return the full path
 
 def execute_pydough_script(script_path):
-    """Execute the generated Python file and capture output."""
+    """Execute the generated Python file and capture output, using the correct Python executable."""
     try:
-        print(f"⏳ Executing {script_path}...")
-        print(f"Command: python {script_path}")
+        python_executable = sys.executable # Get path to python from current venv
+        print(f"⏳ Executing {script_path}... using {python_executable}")
+        print(f"Command: {python_executable} {script_path}")
         
-        # Use Popen for more control and to read output in real-time if needed
         process = subprocess.Popen(
-            ["python", script_path], 
+            [python_executable, script_path], 
             stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE,
             text=True
         )
         
-        stdout, stderr = process.communicate(timeout=60)  # Timeout after 60 seconds
+        stdout, stderr = process.communicate(timeout=60) 
         
         if process.returncode == 0:
             print(f"✅ Execution successful")
@@ -473,7 +476,7 @@ def execute_pydough_script(script_path):
             }
             
     except subprocess.TimeoutExpired:
-        process.kill() # Ensure process is killed on timeout
+        process.kill()
         stdout, stderr = process.communicate()
         print("❌ Execution timed out after 60 seconds")
         return {
@@ -483,7 +486,7 @@ def execute_pydough_script(script_path):
             'partial_error': stderr.strip() if stderr else None
         }
     except FileNotFoundError:
-        error_msg = f"❌ Python interpreter not found or script file {script_path} doesn't exist"
+        error_msg = f"❌ Python interpreter not found at {sys.executable} or script file {script_path} doesn't exist"
         print(error_msg)
         return {'success': False, 'error': error_msg}
     except Exception as e:
@@ -532,143 +535,177 @@ def save_execution_artifacts(execution_result, base_filename):
     else:
         print("ℹ️ Execution result present, but no standard output or error field to save.")
 
-def process_query(query_text, execute=False, save_results=True, model=None, use_code_review=False, domain=None):
-    """Process a single query through the LLM."""
+def process_query(query_text, execute=False, save_results=True, model=None, use_code_review=False, domain=None, history: Optional[List[Dict[str, str]]] = None):
+    """Process a single query through the LLM, potentially using conversation history."""
     print(f"\nProcessing query: {query_text}")
+    if history:
+        print(f"Using conversation history with {len(history)} turns.")
     print("-" * 80)
-    
+
     # If model not provided, get it
     if model is None:
-        model = llm.get_model("gemini-2.5-pro-preview-05-06")
-    
+        model_name = "gemini-2.5-pro-preview-05-06"
+        model = llm.get_model(model_name)
+
     result_data = {
         "query": query_text,
         "timestamp": datetime.now().isoformat(),
         "execution": None,
-        "domain": "Unknown" # Default domain
+        "domain": "Unknown",
+        "history_used": bool(history)
     }
-    
-    adapted_code_content = None 
-    domain_name = "Unknown" # Initialize domain_name
-    
+
+    adapted_code_content = None
+    domain_name = "Unknown"
+    pydough_code = None
+    explanation = None
+
     try:
-        # Detect domain if not explicitly provided
+        # 1. Detect domain (based on current query)
         if domain is None:
             domain_info = detect_domain(query_text)
         else:
-            # Use specified domain if it exists in DOMAINS
             if domain in DOMAINS:
                 domain_info = (domain, DOMAINS[domain]["metadata_file"], DOMAINS[domain]["database_file"])
             else:
                 raise ValueError(f"Unknown domain: {domain}")
-                
         domain_name, metadata_file, database_file = domain_info
         result_data["domain"] = domain_name
-        
-        # Read cheatsheet
+
+        # 2. Read contextual files
         cheatsheet_content = read_file_content('cheatsheet.md')
-        
-        # Read domain-specific schema information
         schema_file = f"defog_{domain_name.lower()}.md"
         if os.path.exists(schema_file):
             schema_content = read_file_content(schema_file)
         else:
-            # Fallback to broker schema if the domain-specific one is not found
             schema_content = read_file_content('defog_broker.md')
             print(f"⚠️ Could not find schema file {schema_file}, using fallback")
             if not schema_content:
-                print(f"⚠️ Using a generic description for {domain_name}")
-                schema_content = f"# {domain_name} Database\nThis database contains information related to {domain_name}."
-        
-        # Create the prompt with domain-specific schema
-        prompt = create_prompt(query_text, cheatsheet_content, schema_content, domain_name)
-        
-        # Send to LLM and get structured response using schema parameter
-        print("⏳ Sending query to Gemini...")
-        try:
-            # Try to get structured output using PyDoughResponse schema
-            response = model.prompt(prompt, schema=PyDoughResponse)
-            response_data = json.loads(response.text())
-            pydough_code = response_data["code"]
-            explanation = response_data.get("explanation", "")
-            
-            # Store the raw response text for debugging
-            result_data["llm_response"] = f"Structured response: {response.text()}"
-            if explanation:
-                result_data["explanation"] = explanation
+                 print(f"⚠️ Using a generic description for {domain_name}")
+                 schema_content = f"# {domain_name} Database\nThis database contains information related to {domain_name}."
+
+        # 3. Generate PyDough code
+        print("⏳ Generating PyDough code...")
+        if history:
+            # --- Format History into Prompt --- 
+            try:
+                history_string = ""
+                for turn in history:
+                    role = turn.get('role', 'unknown').capitalize()
+                    content = turn.get('content', '')
+                    history_string += f"{role}: {content}\\n\\n"
                 
-            print("✅ Received structured response from LLM")
-        except Exception as e:
-            # Fallback to unstructured response if schema fails
-            print(f"⚠️ Structured output failed: {str(e)}")
-            print("Falling back to regex extraction...")
-            response = model.prompt(prompt)
-            result_data["llm_response"] = str(response)
+                # Construct the prompt with history
+                # Use the standard prompt creation but prepend the history
+                base_prompt_structure = create_prompt(query_text, cheatsheet_content, schema_content, domain_name)
+                # A simple way to inject history - might need refinement based on how create_prompt is structured
+                # Assuming create_prompt starts with the task description
+                prompt_parts = base_prompt_structure.split("# User Query", 1)
+                if len(prompt_parts) == 2:
+                   task_description = prompt_parts[0]
+                   rest_of_prompt = prompt_parts[1].split(query_text, 1)[1] # Get part after original query
+                   full_prompt_with_history = f"{task_description}# Conversation History\n{history_string}# Current User Query\n{query_text}{rest_of_prompt}"
+                else: # Fallback if split fails
+                    print("⚠️ Could not inject history smoothly, prepending instead.")
+                    full_prompt_with_history = f"# Conversation History\n{history_string}\n---\n\n{base_prompt_structure}"
+                
+                # Call model.prompt with the combined history + current query prompt
+                response = model.prompt(full_prompt_with_history, schema=PyDoughResponse)
+                response_data = json.loads(response.text())
+                pydough_code = response_data.get("code")
+                explanation = response_data.get("explanation")
+                result_data["llm_response"] = f"Structured response (history formatted): {response.text()}"
+                print("✅ Received structured response from LLM (using formatted history)")
             
-            # Print the full response
-            print("\n🤖 LLM Response:")
-            print(response)
-            
-            # Extract PyDough code using regex
-            pydough_code = extract_pydough_code(str(response))
-        
+            except Exception as e:
+                print(f"⚠️ Error using formatted history prompt: {str(e)}")
+                print("⚠️ Falling back to stateless prompt...")
+                # Fallback to stateless mode if history formatting/call fails
+                history = None # Ensure the stateless block runs
+
+        if not history: # Runs if history is None initially OR if history prompt failed
+             # --- Stateless Prompt (No History or Fallback) ---
+             try:
+                 prompt = create_prompt(query_text, cheatsheet_content, schema_content, domain_name)
+                 response = model.prompt(prompt, schema=PyDoughResponse)
+                 response_data = json.loads(response.text())
+                 pydough_code = response_data.get("code")
+                 explanation = response_data.get("explanation")
+                 result_data["llm_response"] = f"Structured response (stateless): {response.text()}"
+                 print("✅ Received structured response from LLM (stateless)")
+             except Exception as e:
+                 print(f"⚠️ Structured output failed (stateless): {str(e)}")
+                 print("Falling back to regex extraction...")
+                 prompt = create_prompt(query_text, cheatsheet_content, schema_content, domain_name)
+                 response = model.prompt(prompt)
+                 result_data["llm_response"] = str(response)
+                 print("\n🤖 LLM Response (unstructured):")
+                 print(response)
+                 pydough_code = extract_pydough_code(str(response))
+
+        # Update results with generated code and explanation (if any)
         result_data["pydough_code"] = pydough_code
-        
+        if explanation:
+            result_data["explanation"] = explanation
+
+        # 4. Post-processing, Execution, Saving (remains largely the same)
         if pydough_code:
             print("\n📄 Generated PyDough Code:")
             print(pydough_code)
-            
-            # Run code review if enabled
+
+            # Optional code review
             if use_code_review:
-                reviewed_code = review_code_with_llm(pydough_code, model)
+                # Code review likely shouldn't use conversation history directly
+                # Pass the specific model instance if needed
+                review_model = llm.get_model(model_name) # Get a fresh instance if needed
+                reviewed_code = review_code_with_llm(pydough_code, model=review_model) 
                 if reviewed_code and reviewed_code != pydough_code:
                     print("\n📝 Improved PyDough Code after Review:")
                     print(reviewed_code)
                     pydough_code = reviewed_code
                     result_data["reviewed_code"] = reviewed_code
-            
-            # Create a unique filename for this query
-            safe_query = re.sub(r'[^\w]', '_', query_text[:20]).strip('_')
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file_name = f"{domain_name.lower()}_query_{safe_query}_{timestamp}.py"
-            
-            # Adapt the code and get the full path to the file
+
+            # Adapt code for execution
             print("\n🔄 Adapting code for execution")
+            safe_query = re.sub(r'[^\\w]', '_', query_text[:20]).strip('_')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            query_id = f"{domain_name.lower()}_{safe_query}_{timestamp}" # Generate ID here
+            result_data["query_id"] = query_id # Store the ID
+            output_file_name = f"{query_id}.py" # Use query_id for script name
+
             adapted_code_content, output_file_path = adapt_and_execute_code(pydough_code, output_file_name, domain_info)
             result_data["adapted_code"] = adapted_code_content
-            result_data["output_file"] = output_file_path 
-            
+            result_data["output_file"] = output_file_path
+
             # Execute if requested
             if execute:
                 execution_result = execute_pydough_script(output_file_path)
                 result_data["execution"] = execution_result
         else:
             print("\n❌ No PyDough code found in the response")
-    
+
     except Exception as e:
         print(f"\n❌ Error processing query: {str(e)}")
         result_data["error"] = str(e)
-    
-    # Save results if requested
+
+    # 5. Save results if requested
     if save_results:
         os.makedirs("results", exist_ok=True)
         
-        safe_query = re.sub(r'[^\w]', '_', query_text[:20]).strip('_')
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # Ensure domain_name is defined for base_filename, even if detection failed early
-        current_domain_name = result_data.get("domain", "unknown_domain") 
-        base_filename = f"{current_domain_name.lower()}_{safe_query}_{timestamp}"
-        
+        # Use the generated query_id if available, otherwise create a fallback name
+        base_filename = result_data.get("query_id", f"unknown_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+
         # Save comprehensive JSON results
         result_file_path = os.path.join("results", f"query_result_{base_filename}.json")
-        with open(result_file_path, 'w') as f:
-            json.dump(result_data, f, indent=2)
+        with open(result_file_path, 'w') as f:\
+            # Use default=str to handle potential non-serializable types like datetime
+            json.dump(result_data, f, indent=2, default=str) 
         print(f"\n💾 JSON results saved to {result_file_path}")
-        
+
         # Save execution artifacts using the helper function
-        if execute and "execution" in result_data:
+        if execute and result_data.get("execution"):
             save_execution_artifacts(result_data["execution"], base_filename)
-        
+
         if result_data.get("output_file") and os.path.exists(result_data.get("output_file")):
              print(f"ℹ️ Generated Python code is at {result_data['output_file']}")
         elif result_data.get("adapted_code"):
