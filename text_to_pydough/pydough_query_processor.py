@@ -43,8 +43,8 @@ class PyDoughResponse(BaseModel):
 class DomainDetection(BaseModel):
     """Structured response for domain detection."""
     domain: str
-    confidence: float = 1.0
-    reasoning: Optional[str] = None
+    # confidence: float = 1.0  # Temporarily commenting out
+    # reasoning: Optional[str] = None # Temporarily commenting out
 
 # Domain configuration data
 DOMAINS = {
@@ -244,13 +244,17 @@ Available domains:
 
 Return the domain name that best matches the query.
 """
+        print(f"[Domain Detection LLM Prompt]:\n{prompt}\n") # Log the prompt
         # Get structured response
-        response = model.prompt(prompt, schema=DomainDetection)
-        data = json.loads(response.text())
+        response = model.prompt(prompt, schema=DomainDetection, temperature=0.01)
+        response_text = response.text()
+        print(f"[Domain Detection LLM Raw Response]: {response_text}") # Log raw response
+        data = json.loads(response_text)
         
         detected_domain = data["domain"]
         confidence = data.get("confidence", 0.0)
         reasoning = data.get("reasoning", "")
+        print(f"[Domain Detection Parsed LLM Response]: Domain='{detected_domain}', Confidence={confidence}, Reasoning='{reasoning}'") # Log parsed
         
         # Check if detected domain exists in our configuration
         if detected_domain in DOMAINS:
@@ -280,31 +284,68 @@ def detect_domain(query_text):
 
 def create_prompt(query, cheatsheet_content, schema_content, domain_name="Broker"):
     """Create a prompt for the LLM with examples."""
+    
+    # --- Add known collections based on domain --- 
+    collections_info = ""
+    if domain_name in DOMAINS:
+        # Basic collections & key properties (can be refined)
+        if domain_name == "TPCH":
+            collections_info = (
+                "# Known Collections in TPCH (with example properties):\n"
+                "#   orders (key, customer_key, order_status, total_price, order_date, lines: [line])\n"
+                "#   lines (order_key, part_key, supplier_key, line_number, quantity, extended_price, discount, tax)\n"
+                "#   suppliers (key, name, nation_key, account_balance)\n"
+                "#   customers (key, name, nation_key, account_balance, market_segment)\n"
+                "#   nations (key, name, region_key)\n"
+                "#   regions (key, name)\n"
+                "#   parts (key, name, manufacturer, brand, type, size, retail_price)\n"
+                "#   supply_records (part_key, supplier_key, available_quantity, supply_cost)"
+            )
+        elif domain_name == "Broker":
+             collections_info = (
+                 "# Known Collections in Broker (with example properties):\n"
+                 "#   customer (customer_id, name, email)\n"
+                 "#   transaction (transaction_id, customer_id, ticker, type, shares, price_per_share, timestamp)\n"
+                 "#   stock (ticker, company_name, sector)\n"
+                 "#   price (ticker, timestamp, price)"
+             )
+        # Add other domains as needed
+        
     prompt = f"""
 # Task: Convert a natural language query into PyDough code for a {domain_name} database
+
+# Domain Information
+Current Domain: {domain_name}
+{collections_info}
 
 # User Query
 {query}
 
 # {domain_name} Schema Information
-{schema_content}
+{schema_content} # This will be empty if defog_{domain_name}.md is missing
 
 # PyDough Cheatsheet
 {cheatsheet_content}
 
-# Example 1: List all records from main collection
+# Example 1: List all records from a collection
 ```python
-result = {domain_name}.{domain_name if domain_name == "Broker" else "Customer"}.CALCULATE(
-    *  # Select all fields
+result = {domain_name}.YourCollectionName.CALCULATE(
+    # Select all fields using * or specify field names:
+    # field_one, field_two 
+    * 
 )
 ```
 
-# Example 2: Filter records by a condition
+# Example 2: Filter records from a collection by a condition
 ```python
-result = {domain_name}.{domain_name if domain_name == "Broker" else "Orders"}.WHERE(
-    /* condition goes here */
+result = {domain_name}.YourCollectionName.WHERE(
+    # Example condition: field_name == "some_value"
+    # More complex conditions can be built using AND, OR, etc.
+    your_field_name == "example_value" 
 ).CALCULATE(
-    *  # Select needed fields
+    # Specify the field names you want to retrieve:
+    specific_field_name_1, 
+    specific_field_name_2 
 )
 ```
 
@@ -371,7 +412,7 @@ Ensure the code:
     print("⏳ Sending code to LLM for review and improvement...")
     try:
         # Use schema parameter for structured output
-        response = model.prompt(prompt, schema=CodeReviewResponse)
+        response = model.prompt(prompt, schema=CodeReviewResponse, temperature=0.01)
         review_data = json.loads(response.text())
         clean_response = review_data["reviewed_code"]
         
@@ -388,7 +429,7 @@ Ensure the code:
         # Fallback to regex extraction if structured output fails
         print(f"⚠️ Structured output failed for code review: {str(e)}")
         print("Falling back to regex extraction...")
-        response_text = str(model.prompt(prompt))
+        response_text = str(model.prompt(prompt, temperature=0.01))
         return extract_pydough_code(response_text) or code
 
 def adapt_and_execute_code(pydough_code, output_file_name, domain_info=None):
@@ -577,12 +618,15 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
         schema_file = f"defog_{domain_name.lower()}.md"
         if os.path.exists(schema_file):
             schema_content = read_file_content(schema_file)
+            print(f"✅ Using schema file: {schema_file}")
         else:
-            schema_content = read_file_content('defog_broker.md')
-            print(f"⚠️ Could not find schema file {schema_file}, using fallback")
-            if not schema_content:
-                 print(f"⚠️ Using a generic description for {domain_name}")
-                 schema_content = f"# {domain_name} Database\nThis database contains information related to {domain_name}."
+            # If domain-specific schema is missing, use an empty string
+            # instead of falling back to Broker's schema.
+            schema_content = "" 
+            print(f"⚠️ Could not find schema file {schema_file}. Proceeding without specific schema markdown.")
+            # We might still want to check if cheatsheet_content is valid here.
+            if not cheatsheet_content:
+                 print(f"⚠️ Cheatsheet file 'cheatsheet.md' also not found or empty!")
 
         # 3. Generate PyDough code
         print("⏳ Generating PyDough code...")
@@ -610,12 +654,121 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
                     full_prompt_with_history = f"# Conversation History\n{history_string}\n---\n\n{base_prompt_structure}"
                 
                 # Call model.prompt with the combined history + current query prompt
-                response = model.prompt(full_prompt_with_history, schema=PyDoughResponse)
-                response_data = json.loads(response.text())
-                pydough_code = response_data.get("code")
-                explanation = response_data.get("explanation")
-                result_data["llm_response"] = f"Structured response (history formatted): {response.text()}"
-                print("✅ Received structured response from LLM (using formatted history)")
+                response = model.prompt(full_prompt_with_history, schema=PyDoughResponse, temperature=0.01)
+                
+                # --- DETAILED INSPECTION OF RESPONSE OBJECT ---
+                print(f"[DEBUG] Type of response object: {type(response)}")
+                print(f"[DEBUG] Attributes of response object: {dir(response)}")
+                try:
+                    print(f"[DEBUG] response.code: {getattr(response, 'code', 'N/A')}")
+                    print(f"[DEBUG] response.explanation: {getattr(response, 'explanation', 'N/A')}")
+                    # If it has a .data or .dict() method, let's try that too
+                    if hasattr(response, 'data'):
+                        print(f"[DEBUG] response.data: {response.data}")
+                    if hasattr(response, 'dict') and callable(response.dict):
+                        print(f"[DEBUG] response.dict(): {response.dict()}")
+                    if hasattr(response, 'model_dump') and callable(response.model_dump): # For Pydantic v2
+                        print(f"[DEBUG] response.model_dump(): {response.model_dump()}")
+                except Exception as inspect_e:
+                    print(f"[DEBUG] Error during response inspection: {inspect_e}")
+                # --- END DETAILED INSPECTION ---
+                
+                # --- Access attributes directly from the response object --- 
+                pydough_code = None
+                explanation = None
+                raw_response_text = None
+                
+                # First, try to get raw text for better debugging
+                try:
+                    if hasattr(response, 'text') and callable(response.text):
+                        raw_response_text = response.text()
+                    elif hasattr(response, 'content'):
+                        raw_response_text = str(response.content)
+                    else:
+                        raw_response_text = str(response)
+                except Exception as log_e:
+                    raw_response_text = f"[Error getting raw text: {log_e}]"
+                
+                # Print raw text for inspection
+                print(f"[DEBUG] Raw response text: {raw_response_text}")
+
+                # Try multiple approaches to extract the structured data
+                # Approach 1: Parse the raw JSON text directly if available
+                if raw_response_text and '{' in raw_response_text:
+                    try:
+                        # Extract the JSON part from raw text if needed
+                        json_text = raw_response_text
+                        # If text contains a prefix before the JSON, extract just the JSON part
+                        if not json_text.strip().startswith('{'):
+                            json_start = json_text.find('{')
+                            json_text = json_text[json_start:]
+                        
+                        parsed_json = json.loads(json_text)
+                        print(f"[DEBUG] Successfully parsed raw response text as JSON: {parsed_json}")
+                        pydough_code = parsed_json.get("code")
+                        explanation = parsed_json.get("explanation")
+                        
+                        if pydough_code:
+                            print(f"[DEBUG] Successfully extracted code from parsed JSON")
+                    except json.JSONDecodeError as e:
+                        print(f"[DEBUG] Failed to parse raw text as JSON: {e}")
+                        # Continue to other approaches
+                
+                # Approach 2: Access via response.response_json
+                if not pydough_code and hasattr(response, 'response_json'):
+                    print(f"[DEBUG] response.response_json found, type: {type(response.response_json)}, value: {response.response_json}")
+                    try:
+                        if isinstance(response.response_json, dict):
+                            pydough_code = response.response_json.get("code")
+                            explanation = response.response_json.get("explanation")
+                        elif response.response_json is not None:
+                            # It might be JSON text that needs parsing
+                            try:
+                                if isinstance(response.response_json, str):
+                                    parsed_json = json.loads(response.response_json)
+                                    pydough_code = parsed_json.get("code")
+                                    explanation = parsed_json.get("explanation")
+                            except json.JSONDecodeError:
+                                print("[DEBUG] response.response_json is a string but not valid JSON")
+                    except Exception as e:
+                        print(f"[DEBUG] Error accessing response.response_json: {e}")
+                
+                # Approach 3: Try other common attributes/methods for structured data
+                if not pydough_code:
+                    # Try response.json() if it's a method
+                    if hasattr(response, 'json') and callable(response.json):
+                        try:
+                            json_data = response.json()
+                            print(f"[DEBUG] response.json() returned: {json_data}")
+                            if isinstance(json_data, dict):
+                                pydough_code = json_data.get("code")
+                                explanation = json_data.get("explanation")
+                        except Exception as e:
+                            print(f"[DEBUG] Error calling response.json(): {e}")
+                        
+                        # Direct attribute access (our original approach)
+                        if not pydough_code and hasattr(response, 'code'):
+                            pydough_code = response.code
+                        if not explanation and hasattr(response, 'explanation'):
+                            explanation = response.explanation
+                    
+                    # Last resort - extract code with regex from raw_response_text if still not found
+                    if not pydough_code and raw_response_text:
+                        print("[DEBUG] Attempting regex extraction as last resort")
+                        # Look for "code": "..." pattern 
+                        code_match = re.search(r'"code"\s*:\s*"(.*?)"(?:,|\})', raw_response_text, re.DOTALL)
+                        if code_match:
+                            # Handle escaped quotes and newlines
+                            extracted_code = code_match.group(1)
+                            # Replace escaped characters
+                            extracted_code = extracted_code.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+                            pydough_code = extracted_code
+                            print(f"[DEBUG] Extracted code via regex: {pydough_code[:50]}...")
+                
+                print(f"[DEBUG] Final pydough_code: {pydough_code if pydough_code else 'None'}")
+                
+                # Now use the extracted values
+                result_data["llm_response"] = f"Structured response (stateless): {raw_response_text}"
             
             except Exception as e:
                 print(f"⚠️ Error using formatted history prompt: {str(e)}")
@@ -627,17 +780,126 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
              # --- Stateless Prompt (No History or Fallback) ---
              try:
                  prompt = create_prompt(query_text, cheatsheet_content, schema_content, domain_name)
-                 response = model.prompt(prompt, schema=PyDoughResponse)
-                 response_data = json.loads(response.text())
-                 pydough_code = response_data.get("code")
-                 explanation = response_data.get("explanation")
-                 result_data["llm_response"] = f"Structured response (stateless): {response.text()}"
-                 print("✅ Received structured response from LLM (stateless)")
+                 response = model.prompt(prompt, schema=PyDoughResponse, temperature=0.01) # Gets structured response object
+                 
+                 # --- DETAILED INSPECTION OF RESPONSE OBJECT ---
+                 print(f"[DEBUG] Type of response object: {type(response)}")
+                 print(f"[DEBUG] Attributes of response object: {dir(response)}")
+                 try:
+                     print(f"[DEBUG] response.code: {getattr(response, 'code', 'N/A')}")
+                     print(f"[DEBUG] response.explanation: {getattr(response, 'explanation', 'N/A')}")
+                     # If it has a .data or .dict() method, let's try that too
+                     if hasattr(response, 'data'):
+                         print(f"[DEBUG] response.data: {response.data}")
+                     if hasattr(response, 'dict') and callable(response.dict):
+                         print(f"[DEBUG] response.dict(): {response.dict()}")
+                     if hasattr(response, 'model_dump') and callable(response.model_dump): # For Pydantic v2
+                         print(f"[DEBUG] response.model_dump(): {response.model_dump()}")
+                 except Exception as inspect_e:
+                     print(f"[DEBUG] Error during response inspection: {inspect_e}")
+                 # --- END DETAILED INSPECTION ---
+
+                 # --- Access attributes directly from the response object --- 
+                 pydough_code = None
+                 explanation = None
+                 raw_response_text = None
+                 
+                 # First, try to get raw text for better debugging
+                 try:
+                     if hasattr(response, 'text') and callable(response.text):
+                         raw_response_text = response.text()
+                     elif hasattr(response, 'content'):
+                         raw_response_text = str(response.content)
+                     else:
+                         raw_response_text = str(response)
+                 except Exception as log_e:
+                     raw_response_text = f"[Error getting raw text: {log_e}]"
+                 
+                 # Print raw text for inspection
+                 print(f"[DEBUG] Raw response text: {raw_response_text}")
+
+                 # Try multiple approaches to extract the structured data
+                 # Approach 1: Parse the raw JSON text directly if available
+                 if raw_response_text and '{' in raw_response_text:
+                     try:
+                         # Extract the JSON part from raw text if needed
+                         json_text = raw_response_text
+                         # If text contains a prefix before the JSON, extract just the JSON part
+                         if not json_text.strip().startswith('{'):
+                             json_start = json_text.find('{')
+                             json_text = json_text[json_start:]
+                         
+                         parsed_json = json.loads(json_text)
+                         print(f"[DEBUG] Successfully parsed raw response text as JSON: {parsed_json}")
+                         pydough_code = parsed_json.get("code")
+                         explanation = parsed_json.get("explanation")
+                         
+                         if pydough_code:
+                             print(f"[DEBUG] Successfully extracted code from parsed JSON")
+                     except json.JSONDecodeError as e:
+                         print(f"[DEBUG] Failed to parse raw text as JSON: {e}")
+                         # Continue to other approaches
+                 
+                 # Approach 2: Access via response.response_json
+                 if not pydough_code and hasattr(response, 'response_json'):
+                     print(f"[DEBUG] response.response_json found, type: {type(response.response_json)}, value: {response.response_json}")
+                     try:
+                         if isinstance(response.response_json, dict):
+                             pydough_code = response.response_json.get("code")
+                             explanation = response.response_json.get("explanation")
+                         elif response.response_json is not None:
+                             # It might be JSON text that needs parsing
+                             try:
+                                 if isinstance(response.response_json, str):
+                                     parsed_json = json.loads(response.response_json)
+                                     pydough_code = parsed_json.get("code")
+                                     explanation = parsed_json.get("explanation")
+                             except json.JSONDecodeError:
+                                 print("[DEBUG] response.response_json is a string but not valid JSON")
+                     except Exception as e:
+                         print(f"[DEBUG] Error accessing response.response_json: {e}")
+                
+                 # Approach 3: Try other common attributes/methods for structured data
+                 if not pydough_code:
+                     # Try response.json() if it's a method
+                     if hasattr(response, 'json') and callable(response.json):
+                         try:
+                             json_data = response.json()
+                             print(f"[DEBUG] response.json() returned: {json_data}")
+                             if isinstance(json_data, dict):
+                                 pydough_code = json_data.get("code")
+                                 explanation = json_data.get("explanation")
+                         except Exception as e:
+                             print(f"[DEBUG] Error calling response.json(): {e}")
+                     
+                     # Direct attribute access (our original approach)
+                     if not pydough_code and hasattr(response, 'code'):
+                         pydough_code = response.code
+                     if not explanation and hasattr(response, 'explanation'):
+                         explanation = response.explanation
+                 
+                 # Last resort - extract code with regex from raw_response_text if still not found
+                 if not pydough_code and raw_response_text:
+                     print("[DEBUG] Attempting regex extraction as last resort")
+                     # Look for "code": "..." pattern 
+                     code_match = re.search(r'"code"\s*:\s*"(.*?)"(?:,|\})', raw_response_text, re.DOTALL)
+                     if code_match:
+                         # Handle escaped quotes and newlines
+                         extracted_code = code_match.group(1)
+                         # Replace escaped characters
+                         extracted_code = extracted_code.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+                         pydough_code = extracted_code
+                         print(f"[DEBUG] Extracted code via regex: {pydough_code[:50]}...")
+                 
+                 print(f"[DEBUG] Final pydough_code: {pydough_code if pydough_code else 'None'}")
+                 
+                 # Now use the extracted values
+                 result_data["llm_response"] = f"Structured response (stateless): {raw_response_text}"
              except Exception as e:
                  print(f"⚠️ Structured output failed (stateless): {str(e)}")
                  print("Falling back to regex extraction...")
                  prompt = create_prompt(query_text, cheatsheet_content, schema_content, domain_name)
-                 response = model.prompt(prompt)
+                 response = model.prompt(prompt, temperature=0.01)
                  result_data["llm_response"] = str(response)
                  print("\n🤖 LLM Response (unstructured):")
                  print(response)
@@ -711,7 +973,30 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
         elif result_data.get("adapted_code"):
              print(f"⚠️ Generated Python code was created but not found at the expected path: {result_data.get('output_file')}")
 
-    return result_data
+    # Prepare and return the response
+    if not execute:
+        # If execution was not requested, just return the generated code
+        return {
+            "success": True,
+            "query": query_text,
+            "domain": domain_name,
+            "pydough_code": pydough_code,    # snake_case (backend standard)
+            "pydoughCode": pydough_code,     # camelCase (frontend expects this)
+            "explanation": explanation,      # snake_case
+            "timestamp": datetime.now().isoformat(),
+        }
+    else:
+        # If execution was requested, include execution results
+        return {
+            "success": True,
+            "query": query_text,
+            "domain": domain_name,
+            "pydough_code": pydough_code,    # snake_case (backend standard)
+            "pydoughCode": pydough_code,     # camelCase (frontend expects this)
+            "explanation": explanation,      # snake_case 
+            "timestamp": datetime.now().isoformat(),
+            "execution": execution_result,
+        }
 
 def process_all_queries(queries, max_queries=None, execute=False, save_results=True, use_code_review=False, domain=None):
     """Process multiple queries."""

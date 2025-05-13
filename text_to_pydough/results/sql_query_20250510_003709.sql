@@ -1,1 +1,0 @@
-SELECT name, email FROM broker_customers

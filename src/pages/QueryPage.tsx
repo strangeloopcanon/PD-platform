@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Play, Database, Save, Code, FileX, Download, CheckCircle, Key } from 'lucide-react';
+import { ChevronRight, Play, Database, Save, Code, FileX, Download, CheckCircle, Key, Clipboard, RefreshCw } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import Editor from '@monaco-editor/react';
 
@@ -111,6 +111,50 @@ const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
   );
 };
 
+// --- Re-introduce QueryResultsDisplay here or import if separate --- 
+const tableStyles = `
+  .results-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+  }
+  .results-header {
+    background-color: #f3f4f6;
+  }
+  .results-header-cell {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #e5e7eb;
+  }
+  .results-row:nth-child(even) {
+    background-color: #f9fafb;
+  }
+  .results-cell {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+`;
+const QueryResultsDisplay = ({ results }: { results: string | null }) => {
+  if (!results) return null;
+  const containsHtml = results.trim().startsWith('<') && results.includes('>');
+  if (containsHtml) {
+    return (
+      <div className="max-w-full overflow-x-auto">
+        <style>{tableStyles}</style>
+        <div dangerouslySetInnerHTML={{ __html: results }} />
+      </div>
+    );
+  }
+  return (
+    <div className="max-w-full whitespace-pre-wrap font-mono text-sm overflow-x-auto">
+      {results}
+    </div>
+  );
+};
+// --- End QueryResultsDisplay --- 
+
 const QueryPage: React.FC = () => {
   const navigate = useNavigate();
   const { 
@@ -121,20 +165,21 @@ const QueryPage: React.FC = () => {
     queryResults,
     availableDatabases,
     detectedDomain,
-    setDetectedDomain,
     generatedCode,
     generatedSQL,
-    executeCode,
     addHistoryItem,
     isLoading,
     error,
-    setError
+    setError,
+    conversationHistory,
+    clearConversationHistory
   } = useAppContext();
   
   const [processingError, setProcessingError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'results' | 'code' | 'sql'>('results');
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [needsApiKey, setNeedsApiKey] = useState(false);
+  const [autoExecute, setAutoExecute] = useState<boolean>(true);
   
   // Redirect if not connected
   useEffect(() => {
@@ -182,44 +227,26 @@ const QueryPage: React.FC = () => {
   const handleSubmitQuery = async () => {
     if (!currentQuery.trim()) return;
     
+    console.log("handleSubmitQuery called in QueryPage.tsx");
     setProcessingError(null);
     setError(null);
     
     try {
-      // Always pass null for domain to ensure auto-detection
-      const queryResult = await processQuery(currentQuery, null);
+      console.log(`Calling processQuery with autoExecute: ${autoExecute}`);
+      const queryGenResult = await processQuery(currentQuery, autoExecute, selectedDomain);
+      console.log("processQuery call finished in QueryPage.tsx");
       
-      // If we got valid PyDough code, automatically execute it
-      if (queryResult?.pydoughCode) {
-        console.log("Automatically executing generated PyDough code...");
-        try {
-          await executeCode(queryResult.pydoughCode);
-        } catch (execError) {
-          console.error("Error during auto-execution:", execError);
-          // Don't set processing error here since we at least got the code generated
-        }
+      if (queryGenResult?.error && !queryGenResult?.success) {
+        console.error("Error reported by processQuery:", queryGenResult.error);
+        setProcessingError(`Error processing query: ${queryGenResult.error}`);
+      } else {
+        setProcessingError(null);
       }
-      
       setActiveTab('results');
-    } catch (error) {
-      setProcessingError(`Error processing query: ${error}`);
-      console.error('Query processing error:', error);
-    }
-  };
-  
-  // Handle manual code execution
-  const handleExecuteCode = async () => {
-    if (!generatedCode) return;
-    
-    setProcessingError(null);
-    setError(null);
-    
-    try {
-      await executeCode(generatedCode);
-      setActiveTab('results');
-    } catch (error) {
-      setProcessingError(`Error executing code: ${error}`);
-      console.error('Code execution error:', error);
+    } catch (err: any) {
+      console.error('Error in handleSubmitQuery catch block:', err);
+      setProcessingError(`Query processing error: ${err.message || err}`);
+      setError(`Query processing error: ${err.message || err}`);
     }
   };
   
@@ -250,62 +277,26 @@ const QueryPage: React.FC = () => {
     }
   };
   
-  // Format the results data for display
-  const formatResults = () => {
-    if (!queryResults) return null;
-    
-    if (Array.isArray(queryResults)) {
-      return (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {queryResults.length > 0 && Object.keys(queryResults[0]).map((key) => (
-                  <th 
-                    key={key}
-                    scope="col" 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    {key}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {queryResults.map((row, idx) => (
-                <tr key={idx}>
-                  {Object.values(row).map((value, idx) => (
-                    <td key={idx} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
-    
-    // If not an array, show as JSON
-    return (
-      <pre className="bg-gray-50 p-4 rounded-md text-sm overflow-auto">
-        {JSON.stringify(queryResults, null, 2)}
-      </pre>
-    );
+  // NEW: Handle starting a new conversation
+  const handleNewConversation = () => {
+    clearConversationHistory();
+    setCurrentQuery(''); // Clear current query input
+    // queryResults, generatedCode, generatedSQL are cleared in AppContext or will be on next query
+    setProcessingError(null); // Clear local error display
+    setError(null); // Clear global error
+    console.log("New conversation started. History cleared.");
   };
   
+  if (needsApiKey) {
+    return <ApiKeySetup onKeySet={() => setNeedsApiKey(false)} />;
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-2xl font-semibold text-gray-900">Natural Language Query</h1>
       <p className="mt-2 text-sm text-gray-700">
         Ask questions about your data in plain English
       </p>
-      
-      {/* Show API key setup if needed */}
-      {needsApiKey && (
-        <ApiKeySetup onKeySet={() => setNeedsApiKey(false)} />
-      )}
       
       {/* Update the error message if it still shows up */}
       {processingError && (processingError.includes("gemini-2.5-pro-preview-05-06") || processingError.includes("gemini-2.0-flash")) && (
@@ -355,17 +346,13 @@ const QueryPage: React.FC = () => {
               {/* Domain selector dropdown removed - using auto-detection */}
               
               <button
-                type="button"
-                onClick={handleSubmitQuery}
+                type="submit"
                 disabled={isLoading || !currentQuery.trim()}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <RefreshCw className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" />
                     Processing...
                   </>
                 ) : (
@@ -477,7 +464,7 @@ const QueryPage: React.FC = () => {
                 </div>
                 
                 {queryResults ? (
-                  formatResults()
+                  <QueryResultsDisplay results={queryResults} />
                 ) : (
                   <p className="text-gray-500 italic">No results to display</p>
                 )}
@@ -492,7 +479,7 @@ const QueryPage: React.FC = () => {
                   <div className="flex items-center space-x-2">
                     <button
                       type="button"
-                      onClick={handleExecuteCode}
+                      onClick={handleSubmitQuery}
                       disabled={isLoading || !generatedCode}
                       className="inline-flex items-center px-3 py-1.5 border border-transparent shadow-sm text-xs font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -732,6 +719,21 @@ const QueryPage: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      {/* Optional: Display Conversation History for Debugging */}
+      {conversationHistory.length > 0 && (
+        <div className="mt-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+          <h3 className="text-md font-semibold text-gray-600 mb-2">Conversation Log (Debug):</h3>
+          <div className="max-h-60 overflow-y-auto text-xs">
+            {conversationHistory.map((turn, index) => (
+              <div key={index} className={`mb-2 p-2 rounded ${turn.role === 'user' ? 'bg-blue-50' : 'bg-green-50'}`}>
+                <p className="font-semibold capitalize">{turn.role}:</p>
+                <pre className="whitespace-pre-wrap break-all">{turn.content}</pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

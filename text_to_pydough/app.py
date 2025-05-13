@@ -17,6 +17,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import pandas as pd
 from datetime import datetime
+import traceback # Import traceback
 
 # Load environment variables from .env file if it exists
 try:
@@ -526,200 +527,57 @@ def detect_domain():
 
 @app.route("/api/query", methods=["POST"])
 def process_query():
-    """Process natural language query to PyDough and SQL"""
+    """Process a natural language query using the PyDough processor."""
+    if not PYDOUGH_AVAILABLE:
+        # Use the mock PQP if the real one isn't available
+        print("⚠️ Using Mock PyDough Processor for /api/query")
+        _pqp = MockPQP()
+    else:
+        _pqp = pqp
+        
+    if not request.is_json:
+        return jsonify({"success": False, "error": "Request must be JSON"}), 400
+        
+    data = request.get_json()
+    query_text = data.get("query_text")
+    domain = data.get("domain") # Optional: user can force a domain
+    history = data.get("history", None) # Optional: conversation history
+    # --- Get execute flag directly from request --- 
+    execute_code_flag = data.get("execute", False) 
+    
+    if not query_text:
+        return jsonify({"success": False, "error": "Missing 'query_text' in request"}), 400
+        
+    print(f"Received query: '{query_text}', Domain hint: {domain}, History: {bool(history)}, Execute: {execute_code_flag}")
+    
     try:
-        data = request.json
-        query = data.get("query")
-        domain = data.get("domain")  # Optional domain
-        
-        if not query:
-            return jsonify({
-                "success": False,
-                "error": "Query is required"
-            }), 400
-            
-        # Check if LLM API is configured
-        if not LLM_API_CONFIGURED:
-            return jsonify({
-                "success": False,
-                "llm_error": LLM_ERROR_MESSAGE,
-                "error": "Gemini API key not configured. Please configure the API key in the virtual environment.",
-                "help": "Run: cd text_to_pydough && source venv/bin/activate && llm keys set gemini"
-            }), 400
-        
-        # Process the query using PyDough processor
-        result = pqp.process_query(
-            query_text=query,
-            execute=False,  # Don't execute yet
-            save_results=False,  # Don't save results yet
-            domain=domain
+        # --- Pass execute flag to the processor --- 
+        result_data = _pqp.process_query(
+            query_text,
+            execute=execute_code_flag, # Pass the flag here
+            save_results=True, # Always save results from API calls
+            domain=domain,
+            history=history
         )
         
-        # Extract information from result
-        return jsonify({
-            "success": True,
-            "domain": result.get("domain", domain),
-            "pydoughCode": result.get("pydough_code", ""),
-            "sql": result.get("sql", ""),
-            "queryId": result.get("query_id", "")
-        })
+        # Add success flag to the result data before returning
+        result_data["success"] = True 
+        if "error" in result_data:
+            # If the processor caught an error, mark success as false
+            result_data["success"] = False
+            print(f"Error reported by process_query: {result_data['error']}")
+            # Optionally return a different HTTP status code, e.g., 500 for server errors
+            # return jsonify(result_data), 500 
+            
+        print("Returning result from /api/query:", json.dumps(result_data, indent=2, default=str)[:500] + "...") # Log first 500 chars
+        return jsonify(result_data)
+        
     except Exception as e:
+        print(f"❌ Unhandled Exception in /api/query: {str(e)}")
+        print(traceback.format_exc()) # Print full traceback for debugging
         return jsonify({
             "success": False,
-            "error": str(e)
-        }), 500
-
-@app.route("/api/execute", methods=["POST"])
-def execute_code():
-    """Execute PyDough code and return results"""
-    try:
-        data = request.json
-        code = data.get("code")
-        domain = data.get("domain")
-        
-        if not code:
-            return jsonify({
-                "success": False,
-                "error": "PyDough code is required"
-            }), 400
-        
-        # Debug to understand current state
-        print(f"PYDOUGH_AVAILABLE = {PYDOUGH_AVAILABLE}")
-        print(f"Module check: {'pydough' in sys.modules}")
-        
-        # Create a unique filename for this execution
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file_name = f"query_{timestamp}.py"
-        
-        # Get domain info
-        domain_info = None
-        if domain and domain in pqp.DOMAINS:
-            domain_info = (domain, pqp.DOMAINS[domain]["metadata_file"], pqp.DOMAINS[domain]["database_file"])
-        
-        # Force mock mode for now until we figure out why it's not being detected
-        mock_mode = True
-        
-        if mock_mode:
-            print("Running in mock mode (pydough module not available)")
-            
-            # Generate a mock script that doesn't require pydough
-            output_file_path = os.path.join(RESULTS_DIR, output_file_name)
-            domain_name = domain if domain else "Broker"
-            
-            # Create a modified version that uses pandas directly
-            mock_code = f"""
-import pandas as pd
-
-# This is a mock execution since pydough is not available
-# Original code:
-# {code}
-
-# Mock result dataframe
-result = pd.DataFrame([
-    {{"name": "John Doe", "email": "john@example.com"}},
-    {{"name": "Jane Smith", "email": "jane@example.com"}},
-    {{"name": "Bob Johnson", "email": "bob@example.com"}}
-])
-
-print("\\nSQL Query:")
-print("SELECT name, email FROM {domain_name.lower()}_customers")
-print("\\nResult:")
-print(result)
-"""
-            
-            # Write the mock script
-            os.makedirs(RESULTS_DIR, exist_ok=True)
-            with open(output_file_path, 'w') as f:
-                f.write(mock_code)
-                
-            # Execute the mock script
-            execution_result = pqp.execute_pydough_script(output_file_path)
-            
-            # Process execution results
-            sql = "SELECT name, email FROM {}_customers".format(domain_name.lower())
-            results = [
-                {"name": "John Doe", "email": "john@example.com"},
-                {"name": "Jane Smith", "email": "jane@example.com"},
-                {"name": "Bob Johnson", "email": "bob@example.com"}
-            ]
-            
-            # Save artifacts
-            base_filename = f"query_{timestamp}"
-            artifacts = pqp.save_execution_artifacts(execution_result, base_filename)
-            
-            return jsonify({
-                "success": True,
-                "sql": sql,
-                "results": results,
-                "executionOutput": execution_result.get("output", ""),
-                "executionError": execution_result.get("error", ""),
-                "artifactPaths": artifacts,
-                "mockMode": True
-            })
-        else:
-            # Real pydough execution mode
-            # Step 1: Adapt the code to create executable script
-            adapted_code_content, script_path = pqp.adapt_and_execute_code(code, output_file_name, domain_info)
-            
-            # Step 2: Execute the script
-            execution_result = pqp.execute_pydough_script(script_path)
-            
-            # Step 3: Process execution results
-            sql = ""
-            results = []
-            
-            if execution_result.get("success"):
-                # Extract SQL from output
-                output = execution_result.get("output", "")
-                sql_match = re.search(r'SQL Query:\s*\n(.*?)(?:\n\nResult:|\Z)', output, re.DOTALL)
-                if sql_match:
-                    sql = sql_match.group(1).strip()
-                
-                # Try to extract results table
-                try:
-                    # Load the script to get access to the result variable
-                    sys.path.append(os.path.dirname(script_path))
-                    script_module = __import__(os.path.basename(script_path).replace(".py", ""))
-                    
-                    if hasattr(script_module, "result"):
-                        result_data = script_module.result
-                        if hasattr(pydough, "to_df"):
-                            result_df = pydough.to_df(result_data)
-                            results = result_df.to_dict(orient="records")
-                except Exception as result_error:
-                    print(f"Error extracting result dataframe: {str(result_error)}")
-                    # If we couldn't extract the result programmatically, try to parse it from stdout
-                    if not results:
-                        try:
-                            # Look for result table in output
-                            result_section = re.search(r'Result:\s*\n(.*?)(?:\Z)', output, re.DOTALL)
-                            if result_section:
-                                result_text = result_section.group(1).strip()
-                                # Convert text table to records - simple approach
-                                if len(result_text) > 0:
-                                    # This is a simplified parser and may not work for all outputs
-                                    # Real implementation should use pandas or similar library
-                                    results = [{"result": result_text}]
-                        except Exception as parse_error:
-                            print(f"Error parsing result from output: {str(parse_error)}")
-            
-            # Save execution artifacts
-            base_filename = f"query_{timestamp}"
-            artifacts = pqp.save_execution_artifacts(execution_result, base_filename)
-            
-            return jsonify({
-                "success": execution_result.get("success", False),
-                "sql": sql,
-                "results": results,
-                "executionOutput": execution_result.get("output", ""),
-                "executionError": execution_result.get("error", ""),
-                "artifactPaths": artifacts,
-                "mockMode": False
-            })
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
+            "error": f"An unexpected server error occurred: {str(e)}"
         }), 500
 
 @app.route("/api/history", methods=["GET"])
