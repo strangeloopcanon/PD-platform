@@ -85,8 +85,8 @@ project_root/
 ├── test.py                      # Test script for LLM structured output
 ├── queries.csv                  # List of natural language queries by category
 ├── cheatsheet.md                # PyDough syntax and usage guide
-├── defog_broker.md              # Broker domain schema documentation
-├── data/                        # Contains .json and .db files for each domain
+├── data/                        # Contains .json, .db, and .md (schema description) files for each domain
+│   ├── broker.md                  # Broker domain schema documentation (moved from root)
 │   ├── Broker_graph.json
 │   ├── Broker.db
 │   ├── Dealership_graph.json    # Additional domain graph files
@@ -191,4 +191,4 @@ This detection system allows you to use natural language queries without explici
 - Add new domains by updating the `DOMAINS` dictionary with new entries including keywords, metadata file path, and database file path.
 - Add new query categories to `queries.csv`.
 - Improve prompt engineering in `create_prompt` for better LLM results.
-- Add domain-specific schema documentation (e.g., `defog_ewallet.md`) for each domain.
+- Add domain-specific schema documentation (e.g., `data/ewallet.md`) for each domain into the `data/` directory.

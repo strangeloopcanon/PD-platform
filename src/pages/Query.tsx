@@ -186,6 +186,36 @@ const Query = () => {
             </div>
           </form>
 
+          <div className="mb-6">
+            <p className="text-xs text-gray-500 mb-1">Or try an example:</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                "List all customers and their email addresses.",
+                "Show all transactions with a 'Pending' status.",
+                "Find all tickers on the 'NYSE' exchange that are of type 'ETF'.",
+                "What is the average closing price for ticker 'IBM' in the last 30 days?",
+              ].map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => {
+                    setCurrentQuery(q);
+                    // Automatically submit the query when an example is clicked, if autoExecute is on
+                    // setError(null); // Clear previous errors
+                    // processQuery(q, autoExecute, null);
+                    // Optionally, focus the textarea after setting query
+                    if (textareaRef.current) {
+                      textareaRef.current.focus();
+                    }
+                  }}
+                  className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-opacity-50"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {error && (
             <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700">
               <p className="font-medium">Error processing query: {error}</p>
@@ -281,51 +311,66 @@ const Query = () => {
             <h2 className="text-lg font-medium text-gray-900 mb-4">Sample Queries</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <h3 className="text-sm font-medium text-gray-900 mb-2">For TPCH:</h3>
+                <h3 className="text-sm font-medium text-gray-900 mb-2">For Broker:</h3>
                 <ul className="space-y-2">
                   <li>
                     <button
-                      onClick={() => setCurrentQuery("List all suppliers and their regions")}
+                      onClick={() => {
+                        setCurrentQuery("List all customers and their email addresses.");
+                        if (textareaRef.current) textareaRef.current.focus();
+                      }}
                       className="text-sm text-primary-600 hover:text-primary-800 hover:underline"
                     >
-                      List all suppliers and their regions
+                      List all customers and their email addresses.
                     </button>
                   </li>
                   <li>
                     <button
-                      onClick={() => setCurrentQuery("Show orders with highest line item count")}
+                      onClick={() => {
+                        setCurrentQuery("Show all transactions with a 'Pending' status.");
+                        if (textareaRef.current) textareaRef.current.focus();
+                      }}
                       className="text-sm text-primary-600 hover:text-primary-800 hover:underline"
                     >
-                      Show orders with highest line item count
+                      Show all transactions with a 'Pending' status.
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => {
+                        setCurrentQuery("Find all tickers on the 'NYSE' exchange that are of type 'ETF'.");
+                        if (textareaRef.current) textareaRef.current.focus();
+                      }}
+                      className="text-sm text-primary-600 hover:text-primary-800 hover:underline"
+                    >
+                      Find all tickers on the 'NYSE' exchange that are of type 'ETF'.
                     </button>
                   </li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-gray-900 mb-2">General Queries:</h3>
+                <h3 className="text-sm font-medium text-gray-900 mb-2">More Broker Examples:</h3>
                 <ul className="space-y-2">
                   <li>
                     <button
-                      onClick={() => setCurrentQuery("Show me the total count of records in each table")}
+                      onClick={() => {
+                        setCurrentQuery("What is the average closing price for ticker 'IBM' in the last 30 days?");
+                        if (textareaRef.current) textareaRef.current.focus();
+                      }}
                       className="text-sm text-primary-600 hover:text-primary-800 hover:underline"
                     >
-                      Show me the total count of records in each table
+                      What is the average closing price for ticker 'IBM' in the last 30 days?
                     </button>
                   </li>
                   <li>
                     <button
-                      onClick={() => setCurrentQuery("What is the most recent transaction in the database?")}
+                      onClick={() => {
+                        setCurrentQuery("Which customers made transactions for the ticker 'NVDA'?");
+                        if (textareaRef.current) textareaRef.current.focus();
+                      }}
                       className="text-sm text-primary-600 hover:text-primary-800 hover:underline"
                     >
-                      What is the most recent transaction in the database?
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      onClick={() => setCurrentQuery("Create a summary report of key metrics")}
-                      className="text-sm text-primary-600 hover:text-primary-800 hover:underline"
-                    >
-                      Create a summary report of key metrics
+                      Which customers made transactions for the ticker 'NVDA'?
                     </button>
                   </li>
                 </ul>

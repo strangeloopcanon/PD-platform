@@ -81,7 +81,16 @@ def check_requirements():
     print("\n--- Checking Requirements ---")
     
     # Check required files
-    required_files = ['queries.csv', 'cheatsheet.md', 'defog_broker.md', 'data/Broker_graph.json', 'data/Broker.db']
+    required_files = [
+        'queries.csv', 
+        'cheatsheet.md', 
+        'data/broker.md', # Changed from defog_broker.md in root
+        'data/Broker_graph.json', 
+        'data/Broker.db'
+    ]
+    # We should also ideally check for the .md files for other domains if they are considered essential.
+    # For now, just ensuring broker.md is checked at its new location.
+
     missing_files = []
 
     for file in required_files:
@@ -615,18 +624,18 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
 
         # 2. Read contextual files
         cheatsheet_content = read_file_content('cheatsheet.md')
-        schema_file = f"defog_{domain_name.lower()}.md"
-        if os.path.exists(schema_file):
-            schema_content = read_file_content(schema_file)
-            print(f"✅ Using schema file: {schema_file}")
+        schema_content = ""
+        schema_file_path = os.path.join("data", f"{domain_name.lower()}.md")
+
+        print(f"INFO: Attempting to load schema description file: {schema_file_path}")
+        if os.path.exists(schema_file_path):
+            schema_content = read_file_content(schema_file_path)
+            if schema_content:
+                print(f"INFO: Successfully loaded schema description from {schema_file_path}")
+            else:
+                print(f"WARNING: Schema file {schema_file_path} was found but is empty.")
         else:
-            # If domain-specific schema is missing, use an empty string
-            # instead of falling back to Broker's schema.
-            schema_content = "" 
-            print(f"⚠️ Could not find schema file {schema_file}. Proceeding without specific schema markdown.")
-            # We might still want to check if cheatsheet_content is valid here.
-            if not cheatsheet_content:
-                 print(f"⚠️ Cheatsheet file 'cheatsheet.md' also not found or empty!")
+            print(f"WARNING: Schema description file not found: {schema_file_path}. Proceeding without specific schema markdown.")
 
         # 3. Generate PyDough code
         print("⏳ Generating PyDough code...")
