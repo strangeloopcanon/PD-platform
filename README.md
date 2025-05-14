@@ -191,3 +191,56 @@ This script will:
 -   **Branching Strategy:** Use feature branches (`git checkout -b feature/your-feature-name`) for new work and create Pull Requests (PRs) for merging changes into the main branch (e.g., `main` or `develop`).
 -   **Linting and Formatting:** Consider adding linters (e.g., ESLint for frontend, Pylint/Flake8 for backend) and formatters (e.g., Prettier for frontend, Black for backend) to maintain code consistency.
 -   **Error Handling:** Continuously improve error handling in both frontend and backend to provide informative messages to the user.
+
+## Technology Stack
+
+### Frontend
+- **Framework**: React 18 with TypeScript
+- **Build Tool**: Vite 5.4+
+- **UI Components & Styling**:
+  - Tailwind CSS 3.4 for styling
+  - Monaco Editor for code display
+  - Lucide React for icons
+  - React Hot Toast for notifications
+  - React Markdown for rendering markdown content
+
+### Backend
+- **Language**: Python 3.11+
+- **Web Framework**: Flask 2.3+ with Flask-CORS
+- **Data Processing**:
+  - Pandas 2.1+ for data manipulation
+  - PyDough 0.1+ for database query DSL
+- **LLM Integration**:
+  - LLM 0.25+ (Simon Willison's LLM library)
+  - LLM-Gemini 0.19+ for Google Gemini integration
+  - Supported models: Gemini 2.5 Pro Preview, Gemini 2.0 Flash
+- **Data Validation**: Pydantic 2.4+
+- **Environment Management**: python-dotenv 1.0+
+
+### Database
+- SQLite databases (.db files) for different domains (e.g., TPCH, Broker, Dealership)
+
+### Project Structure
+- `src/`: React/TypeScript frontend
+  - Components, context, pages
+- `text_to_pydough/`: Python Flask backend
+  - Natural language to PyDough to SQL processing
+  - Domain detection via LLM
+  - API endpoints for query processing
+- `data/`: Schema files (JSON) and database files (SQLite)
+
+### Development & Build Tools
+- **Package Management**: npm (Node.js)
+- **Linting**: ESLint 9.9+
+- **Type Checking**: TypeScript 5.5+
+- **CSS Processing**: PostCSS 8.4+, Autoprefixer 10.4+
+
+### Deployment
+- Development mode: `start.sh` script runs both frontend and backend
+  - Frontend on http://localhost:5173
+  - Backend on http://localhost:5001
+
+### Authentication & Security
+- Requires Google Gemini API key for LLM functionality
+- Key management via LLM CLI tool or environment variables
+
