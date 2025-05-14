@@ -91,6 +91,11 @@ interface AppContextProps {
   // New properties for Conversation History
   conversationHistory: ConversationTurn[];
   clearConversationHistory: () => void;
+  
+  // LangGraph support
+  useLangGraph: boolean;
+  setUseLangGraph: (use: boolean) => void;
+  langGraphAvailable: boolean;
 }
 
 const AppContext = createContext<AppContextProps | undefined>(undefined);
@@ -116,6 +121,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // State for Conversation History
   const [conversationHistory, setConversationHistory] = useState<ConversationTurn[]>([]);
   
+  // LangGraph support
+  const [useLangGraph, setUseLangGraph] = useState<boolean>(false);
+  const [langGraphAvailable, setLangGraphAvailable] = useState<boolean>(false);
+
   // Load demo history items from localStorage
   const [queryHistoryItems, setQueryHistoryItems] = useState<HistoryItem[]>(() => {
     try {
@@ -313,6 +322,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
   
+  // Scan for available databases and get initial API status
+  useEffect(() => {
+    const checkAPIStatus = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/status`);
+        const data = await response.json();
+        
+        // Check if LangGraph is available
+        setLangGraphAvailable(!!data.langgraph_available);
+        
+        // Proceed with database scanning
+        scanDatabases();
+      } catch (error) {
+        console.error("Failed to check API status:", error);
+        setError("Failed to connect to backend API");
+      }
+    };
+    
+    checkAPIStatus();
+  }, []);
+
   // Process a natural language query
   const processQuery = async (query: string, execute: boolean, domain: string | null = null): Promise<any> => {
     setIsLoading(true);
@@ -327,22 +357,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setConversationHistory(currentHistory); // Update state immediately
     
     try {
-      const response = await fetch(`${API_BASE_URL}/query`, {
+      // Choose endpoint based on useLangGraph setting
+      const endpoint = useLangGraph ? `${API_BASE_URL}/query-lg` : `${API_BASE_URL}/query`;
+      
+      // Prepare request body based on selected endpoint
+      const requestBody = useLangGraph ? 
+        {
+          query: query,
+          execute: execute,
+          domain: domain,
+          history: conversationHistory.map(turn => ({
+            role: turn.role,
+            content: turn.content
+          }))
+        } : 
+        {
+          query_text: query,
+          domain: domain,
+          history: conversationHistory,
+          execute: execute
+        };
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          query_text: query,
-          domain: domain, // Send selected domain if provided
-          history: conversationHistory, // Send the history *before* the current user query
-          execute: execute // Pass the execute flag here
-        })
+        body: JSON.stringify(requestBody)
       });
       
       const data = await response.json();
+      
       // --- DEBUG LOG --- 
-      console.log("Received data from /api/query:", JSON.stringify(data, null, 2));
+      console.log(`Received data from ${endpoint}:`, JSON.stringify(data, null, 2));
       
       // Detect and handle executeCode error here
       window.addEventListener('error', (event) => {
@@ -353,179 +400,230 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       }, { once: true });
       
-      // Additional diagnostic to help identify the issue
-      if (data.pydough_code && !data.pydoughCode) {
-        console.log("CRITICAL: Found data.pydough_code but not data.pydoughCode - naming inconsistency!");
-        // Copy the value to ensure frontend can display it
-        data.pydoughCode = data.pydough_code;
-      }
-      
-      if (data.success) { // API call succeeded (doesn't mean execution succeeded)
-        // Make sure we handle both camelCase and snake_case field names from API
-        const codeToDisplay = data.pydoughCode || data.pydough_code || null;
-        setGeneratedCode(codeToDisplay);
-        
-        // If execution happened, attempt to parse SQL and Results
-        let sqlResult = null;
-        let dataResult = null;
-        let executionError: string | null = null; // Variable for specific execution error
-
-        if (data.execution) { // Check if execution results exist
-          // More robust SQL extraction - look for it in different places
-          const executionOutput = data.execution.output || '';
+      // Handle LangGraph response format which differs from regular API
+      if (useLangGraph) {
+        if (data.success) {
+          setGeneratedCode(data.pydough_code || null);
           
-          // 1. Try to extract SQL directly from the output
-          const sqlMatch = executionOutput.match(/SQL Query:([\s\S]*?)(?=Result:|$)/);
-          if (sqlMatch && sqlMatch[1]) {
-            sqlResult = sqlMatch[1].trim();
-          }
+          // Handle execution results
+          let sqlResult = null;
+          let dataResult = null;
           
-          // 2. If no SQL found in output, check if it's directly provided
-          if (!sqlResult && data.execution.sql) {
-            sqlResult = data.execution.sql;
-          }
-          
-          // 3. Extract results data similarly
-          const dataMatch = executionOutput.match(/Result:([\s\S]*?)(?=$)/);
-          if (dataMatch && dataMatch[1]) {
-            // Extract the raw tabular data
-            const rawTableData = dataMatch[1].trim();
+          if (data.execution) {
+            // Extract SQL from execution result
+            if (data.execution.sql) {
+              sqlResult = data.execution.sql;
+            }
             
-            // Basic check - if it looks like tabular data with rows and columns
-            if (rawTableData.includes('\n') && rawTableData.match(/\s{2,}/)) {
-              try {
-                // Format as simple HTML table
-                const lines = rawTableData.split('\n').filter((line: string) => line.trim());
-                
-                if (lines.length >= 2) {
-                  // Create a basic HTML table
-                  let tableHtml = '<table class="results-table">';
-                  
-                  // Add header row
-                  const headerLine = lines[0];
-                  tableHtml += '<thead><tr class="results-header">';
-                  headerLine.split(/\s{2,}/).forEach((header: string) => {
-                    tableHtml += `<th class="results-header-cell">${header.trim()}</th>`;
-                  });
-                  tableHtml += '</tr></thead>';
-                  
-                  // Add data rows
-                  tableHtml += '<tbody>';
-                  lines.slice(1).forEach((line: string) => {
-                    tableHtml += '<tr class="results-row">';
-                    line.split(/\s{2,}/).forEach((cell: string) => {
-                      tableHtml += `<td class="results-cell">${cell.trim()}</td>`;
-                    });
-                    tableHtml += '</tr>';
-                  });
-                  
-                  tableHtml += '</tbody></table>';
-                  
-                  // Set directly as HTML
-                  dataResult = tableHtml;
-                } else {
-                  // Not enough lines for a table, use as-is
-                  dataResult = rawTableData;
-                }
-              } catch (e) {
-                console.warn("Failed to format table data:", e);
-                dataResult = rawTableData; // Fall back to raw text
+            // Extract data results
+            if (data.execution.result_data) {
+              if (data.execution.result_data.pandas_df) {
+                // Format pandas dataframe as HTML table
+                dataResult = `<div class="results-html">${data.execution.result_data.pandas_df}</div>`;
+              } else if (data.execution.result_data.result_str) {
+                dataResult = data.execution.result_data.result_str;
               }
-            } else {
-              // Not a table structure, use as-is
-              dataResult = rawTableData;
             }
           }
           
-          // 4. Direct result data if available
-          if (!dataResult && data.execution.results) {
-            dataResult = JSON.stringify(data.execution.results, null, 2);
+          setGeneratedSQL(sqlResult);
+          setQueryResults(dataResult);
+          setDetectedDomain(data.domain || null);
+          
+          // Add assistant response from messages
+          if (data.messages) {
+            const assistantMessages = data.messages.filter((msg: any) => msg.role === 'assistant');
+            if (assistantMessages.length > 0) {
+              const assistantTurn: ConversationTurn = {
+                role: 'assistant',
+                content: assistantMessages.map((msg: any) => msg.content).join('\n\n')
+              };
+              setConversationHistory([...currentHistory, assistantTurn]);
+            }
           }
           
-          // Handle execution errors
-          if (!data.execution.success) {
-            executionError = data.execution.error || "Execution failed without a specific error message";
-          }
+          return data;
+        } else {
+          // Handle error
+          setError(data.error || "An error occurred processing your query");
+          return null;
+        }
+      } else {
+        // Original processing for the regular API endpoint
+        // Additional diagnostic to help identify the issue
+        if (data.pydough_code && !data.pydoughCode) {
+          console.log("CRITICAL: Found data.pydough_code but not data.pydoughCode - naming inconsistency!");
+          // Copy the value to ensure frontend can display it
+          data.pydoughCode = data.pydough_code;
         }
         
-        // Fallback explanation if no execution result or explanation provided
-        if (dataResult === null && data.explanation) {
-          dataResult = data.explanation;
-        }
-        
-        // Format the results data if it's a JSON string representing a table
-        if (typeof dataResult === 'string' && dataResult.startsWith('{"type":"table"')) {
-          try {
-            const tableData = JSON.parse(dataResult);
-            if (tableData.type === 'table' && tableData.header && tableData.rows) {
-              // Format as a proper HTML table for display
-              const tableHtml = `
-                <table class="results-table">
-                  <thead>
-                    <tr>${tableData.header.map((h: string) => `<th>${h}</th>`).join('')}</tr>
-                  </thead>
-                  <tbody>
-                    ${tableData.rows.map((row: string[]) => 
-                      `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`
-                    ).join('')}
-                  </tbody>
-                </table>
-              `;
-              // Store the HTML version for display
-              dataResult = tableHtml;
+        if (data.success) { // API call succeeded (doesn't mean execution succeeded)
+          // Make sure we handle both camelCase and snake_case field names from API
+          const codeToDisplay = data.pydoughCode || data.pydough_code || null;
+          setGeneratedCode(codeToDisplay);
+          
+          // If execution happened, attempt to parse SQL and Results
+          let sqlResult = null;
+          let dataResult = null;
+          let executionError: string | null = null; // Variable for specific execution error
+
+          if (data.execution) { // Check if execution results exist
+            // More robust SQL extraction - look for it in different places
+            const executionOutput = data.execution.output || '';
+            
+            // 1. Try to extract SQL directly from the output
+            const sqlMatch = executionOutput.match(/SQL Query:([\s\S]*?)(?=Result:|$)/);
+            if (sqlMatch && sqlMatch[1]) {
+              sqlResult = sqlMatch[1].trim();
             }
-          } catch (e) {
-            console.warn("Failed to parse or format table data:", e);
-            // Keep original format if parsing fails
+            
+            // 2. If no SQL found in output, check if it's directly provided
+            if (!sqlResult && data.execution.sql) {
+              sqlResult = data.execution.sql;
+            }
+            
+            // 3. Extract results data similarly
+            const dataMatch = executionOutput.match(/Result:([\s\S]*?)(?=$)/);
+            if (dataMatch && dataMatch[1]) {
+              // Extract the raw tabular data
+              const rawTableData = dataMatch[1].trim();
+              
+              // Basic check - if it looks like tabular data with rows and columns
+              if (rawTableData.includes('\n') && rawTableData.match(/\s{2,}/)) {
+                try {
+                  // Format as simple HTML table
+                  const lines = rawTableData.split('\n').filter((line: string) => line.trim());
+                  
+                  if (lines.length >= 2) {
+                    // Create a basic HTML table
+                    let tableHtml = '<table class="results-table">';
+                    
+                    // Add header row
+                    const headerLine = lines[0];
+                    tableHtml += '<thead><tr class="results-header">';
+                    headerLine.split(/\s{2,}/).forEach((header: string) => {
+                      tableHtml += `<th class="results-header-cell">${header.trim()}</th>`;
+                    });
+                    tableHtml += '</tr></thead>';
+                    
+                    // Add data rows
+                    tableHtml += '<tbody>';
+                    lines.slice(1).forEach((line: string) => {
+                      tableHtml += '<tr class="results-row">';
+                      line.split(/\s{2,}/).forEach((cell: string) => {
+                        tableHtml += `<td class="results-cell">${cell.trim()}</td>`;
+                      });
+                      tableHtml += '</tr>';
+                    });
+                    
+                    tableHtml += '</tbody></table>';
+                    
+                    // Set directly as HTML
+                    dataResult = tableHtml;
+                  } else {
+                    // Not enough lines for a table, use as-is
+                    dataResult = rawTableData;
+                  }
+                } catch (e) {
+                  console.warn("Failed to format table data:", e);
+                  dataResult = rawTableData; // Fall back to raw text
+                }
+              } else {
+                // Not a table structure, use as-is
+                dataResult = rawTableData;
+              }
+            }
+            
+            // 4. Direct result data if available
+            if (!dataResult && data.execution.results) {
+              dataResult = JSON.stringify(data.execution.results, null, 2);
+            }
+            
+            // Handle execution errors
+            if (!data.execution.success) {
+              executionError = data.execution.error || "Execution failed without a specific error message";
+            }
           }
-        }
-        
-        setGeneratedSQL(sqlResult);
-        setQueryResults(dataResult); // Store parsed/raw result string, explanation, or failure message
-        setDetectedDomain(data.domain || null);
-        
-        // If execution failed, set the main error state
-        if (executionError) {
-            setError(executionError); 
-        } else {
-            // Optionally clear error if the whole process was successful
-            // setError(null); // Decided against auto-clearing here to avoid hiding unrelated errors
-        }
-        
-        // Add assistant response to history
-        const assistantContentParts = [];
-        if (codeToDisplay) {
-            assistantContentParts.push(`Generated Code:\n\`\`\`python\n${codeToDisplay}\n\`\`\``);
-        } else {
-             assistantContentParts.push("No PyDough code was generated.");
-        }
+          
+          // Fallback explanation if no execution result or explanation provided
+          if (dataResult === null && data.explanation) {
+            dataResult = data.explanation;
+          }
+          
+          // Format the results data if it's a JSON string representing a table
+          if (typeof dataResult === 'string' && dataResult.startsWith('{"type":"table"')) {
+            try {
+              const tableData = JSON.parse(dataResult);
+              if (tableData.type === 'table' && tableData.header && tableData.rows) {
+                // Format as a proper HTML table for display
+                const tableHtml = `
+                  <table class="results-table">
+                    <thead>
+                      <tr>${tableData.header.map((h: string) => `<th>${h}</th>`).join('')}</tr>
+                    </thead>
+                    <tbody>
+                      ${tableData.rows.map((row: string[]) => 
+                        `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`
+                      ).join('')}
+                    </tbody>
+                  </table>
+                `;
+                // Store the HTML version for display
+                dataResult = tableHtml;
+              }
+            } catch (e) {
+              console.warn("Failed to parse or format table data:", e);
+              // Keep original format if parsing fails
+            }
+          }
+          
+          setGeneratedSQL(sqlResult);
+          setQueryResults(dataResult); // Store parsed/raw result string, explanation, or failure message
+          setDetectedDomain(data.domain || null);
+          
+          // If execution failed, set the main error state
+          if (executionError) {
+              setError(executionError); 
+          } else {
+              // Optionally clear error if the whole process was successful
+              // setError(null); // Decided against auto-clearing here to avoid hiding unrelated errors
+          }
+          
+          // Add assistant response to history
+          const assistantContentParts = [];
+          if (codeToDisplay) {
+              assistantContentParts.push(`Generated Code:\n\`\`\`python\n${codeToDisplay}\n\`\`\``);
+          } else {
+               assistantContentParts.push("No PyDough code was generated.");
+          }
 
-        if (sqlResult) {
-            assistantContentParts.push(`SQL:\n\`\`\`sql\n${sqlResult}\n\`\`\``);
-        }
-        if (dataResult) { 
-            assistantContentParts.push(`Result:\n${dataResult}`);
-        }
-        // Append execution error explicitly if it occurred
-        if (executionError) {
-            // Use markdown code block for potentially multi-line errors
-            assistantContentParts.push(`Execution Error:\n\`\`\`\n${executionError}\n\`\`\``);
-        }
+          if (sqlResult) {
+              assistantContentParts.push(`SQL:\n\`\`\`sql\n${sqlResult}\n\`\`\``);
+          }
+          if (dataResult) { 
+              assistantContentParts.push(`Result:\n${dataResult}`);
+          }
+          // Append execution error explicitly if it occurred
+          if (executionError) {
+              // Use markdown code block for potentially multi-line errors
+              assistantContentParts.push(`Execution Error:\n\`\`\`\n${executionError}\n\`\`\``);
+          }
 
-        const assistantTurn: ConversationTurn = {
-          role: 'assistant',
-          content: assistantContentParts.join('\n\n') // Join parts with double newline
-        };
-        setConversationHistory(prev => [...prev, assistantTurn]);
-        
-        return data; // Return full response data
-      } else { // API call itself failed
-        const errorMsg = data.error || "Failed to process query";
-        setError(errorMsg); // Set main error from top-level error
-        // Add error turn to history
-        const errorTurn: ConversationTurn = { role: 'assistant', content: `Error: ${errorMsg}` };
-        setConversationHistory(prev => [...prev, errorTurn]);
-        return data; // Still return data which includes error
+          const assistantTurn: ConversationTurn = {
+            role: 'assistant',
+            content: assistantContentParts.join('\n\n') // Join parts with double newline
+          };
+          setConversationHistory(prev => [...prev, assistantTurn]);
+          
+          return data; // Return full response data
+        } else { // API call itself failed
+          const errorMsg = data.error || "Failed to process query";
+          setError(errorMsg); // Set main error from top-level error
+          // Add error turn to history
+          const errorTurn: ConversationTurn = { role: 'assistant', content: `Error: ${errorMsg}` };
+          setConversationHistory(prev => [...prev, errorTurn]);
+          return data; // Still return data which includes error
+        }
       }
     } catch (error: any) { // Network or other frontend error
       console.error("Error processing query:", error);
@@ -550,11 +648,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCurrentQuery(''); // Optionally clear the input box too
     console.log("Conversation history cleared.");
   };
-
-  // Auto-scan databases on initial load
-  useEffect(() => {
-    scanDatabases();
-  }, []);
 
   const contextValue: AppContextProps = {
     // Original properties
@@ -595,7 +688,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     // Conversation History properties
     conversationHistory,
-    clearConversationHistory
+    clearConversationHistory,
+    
+    // LangGraph support
+    useLangGraph,
+    setUseLangGraph,
+    langGraphAvailable
   };
 
   return (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Play, Database, Save, Code, FileX, Download, CheckCircle, Key, Clipboard, RefreshCw } from 'lucide-react';
+import { ChevronRight, Play, Database, Save, Code, FileX, Download, CheckCircle, Key, Clipboard, RefreshCw, Settings } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import Editor from '@monaco-editor/react';
 
@@ -172,7 +172,10 @@ const QueryPage: React.FC = () => {
     error,
     setError,
     conversationHistory,
-    clearConversationHistory
+    clearConversationHistory,
+    useLangGraph,
+    setUseLangGraph,
+    langGraphAvailable
   } = useAppContext();
   
   const [processingError, setProcessingError] = useState<string | null>(null);
@@ -180,6 +183,7 @@ const QueryPage: React.FC = () => {
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [needsApiKey, setNeedsApiKey] = useState(false);
   const [autoExecute, setAutoExecute] = useState<boolean>(true);
+  const [showSettings, setShowSettings] = useState<boolean>(false);
   
   // Redirect if not connected
   useEffect(() => {
@@ -293,10 +297,110 @@ const QueryPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-semibold text-gray-900">Natural Language Query</h1>
-      <p className="mt-2 text-sm text-gray-700">
-        Ask questions about your data in plain English
-      </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Natural Language Query</h1>
+          <p className="mt-2 text-sm text-gray-700">
+            Ask questions about your data in plain English
+          </p>
+        </div>
+        
+        {/* Settings Button */}
+        <button 
+          onClick={() => setShowSettings(!showSettings)}
+          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        >
+          <Settings className="h-4 w-4 mr-2" />
+          Settings
+        </button>
+      </div>
+      
+      {/* Settings Panel */}
+      {showSettings && (
+        <div className="mt-4 bg-gray-50 p-4 rounded-md border border-gray-200">
+          <h3 className="text-sm font-medium text-gray-900 mb-3">Query Settings</h3>
+          <div className="space-y-4">
+            {/* Auto-execute Toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-sm font-medium text-gray-700">Auto-execute generated code</span>
+                <p className="text-xs text-gray-500">Automatically run the generated PyDough code</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoExecute}
+                onClick={() => setAutoExecute(!autoExecute)}
+                className={`${
+                  autoExecute ? 'bg-primary-600' : 'bg-gray-200'
+                } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`${
+                    autoExecute ? 'translate-x-5' : 'translate-x-0'
+                  } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                ></span>
+              </button>
+            </div>
+            
+            {/* LangGraph Toggle - Only show if available */}
+            {langGraphAvailable && (
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Use LangGraph processing</span>
+                  <p className="text-xs text-gray-500">Enhanced state management for better conversational context</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={useLangGraph}
+                  onClick={() => setUseLangGraph(!useLangGraph)}
+                  className={`${
+                    useLangGraph ? 'bg-green-600' : 'bg-gray-200'
+                  } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`${
+                      useLangGraph ? 'translate-x-5' : 'translate-x-0'
+                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                  ></span>
+                </button>
+              </div>
+            )}
+            
+            {/* Domain Selection */}
+            <div>
+              <label htmlFor="domain-select" className="block text-sm font-medium text-gray-700">Domain selection</label>
+              <select
+                id="domain-select"
+                value={selectedDomain || ''}
+                onChange={(e) => setSelectedDomain(e.target.value || null)}
+                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+              >
+                <option value="">Auto-detect domain</option>
+                {availableDatabases.map((db) => (
+                  <option key={db.name} value={db.name}>{db.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">Select a specific domain or let the system auto-detect</p>
+            </div>
+            
+            {/* Clear Conversation */}
+            <div>
+              <button
+                onClick={handleNewConversation}
+                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                <FileX className="h-4 w-4 mr-2" />
+                Clear conversation history
+              </button>
+              <p className="mt-1 text-xs text-gray-500">Start a new conversation</p>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Update the error message if it still shows up */}
       {processingError && (processingError.includes("gemini-2.5-pro-preview-05-06") || processingError.includes("gemini-2.0-flash")) && (
@@ -347,6 +451,7 @@ const QueryPage: React.FC = () => {
               
               <button
                 type="submit"
+                onClick={handleSubmitQuery}
                 disabled={isLoading || !currentQuery.trim()}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >

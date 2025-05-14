@@ -58,6 +58,16 @@ if GEMINI_API_KEY:
 try:
     import pydough_query_processor as pqp
     
+    # Try to import LangGraph implementation
+    try:
+        import langgraph_impl as lgi
+        LANGGRAPH_AVAILABLE = True
+        print("✅ LangGraph implementation available")
+    except ImportError as e:
+        LANGGRAPH_AVAILABLE = False
+        print(f"⚠️ Warning: LangGraph implementation not available: {e}")
+        print("LangGraph functionality will be disabled")
+    
     # Try to check if LLM API is configured by importing llm
     try:
         import llm
@@ -258,19 +268,17 @@ Result:
 
 @app.route("/api/status", methods=["GET"])
 def get_status():
-    """Get API status and dependency information"""
-    return jsonify({
-        "success": True,
+    """Get API status and configuration info."""
+    status = {
+        "status": "ok",
+        "version": "1.0.0",
+        "llm_configured": LLM_API_CONFIGURED,
+        "langgraph_available": LANGGRAPH_AVAILABLE if 'LANGGRAPH_AVAILABLE' in globals() else False,
         "pydough_available": PYDOUGH_AVAILABLE,
-        "llm_api_configured": LLM_API_CONFIGURED,
-        "llm_error": LLM_ERROR_MESSAGE,
-        "python_version": sys.version,
-        "dependencies": {
-            "flask": True,
-            "pandas": True,
-            "llm": PYDOUGH_AVAILABLE and LLM_API_CONFIGURED
-        }
-    })
+        "databases": list(pqp.DOMAINS.keys()) if PYDOUGH_AVAILABLE else [],
+        "error": LLM_ERROR_MESSAGE
+    }
+    return jsonify(status)
 
 @app.route("/api/api-key", methods=["POST"])
 def set_api_key():
@@ -646,6 +654,118 @@ def get_history_item(query_id):
 def get_result_file(filename):
     """Serve result files (like CSV exports)"""
     return send_from_directory(RESULTS_DIR, filename)
+
+@app.route("/api/query-lg", methods=["POST"])
+def process_query_langgraph():
+    """Process a query using LangGraph implementation."""
+    if not PYDOUGH_AVAILABLE:
+        return jsonify({
+            "success": False,
+            "error": "PyDough processor not available"
+        }), 500
+        
+    if not 'LANGGRAPH_AVAILABLE' in globals() or not LANGGRAPH_AVAILABLE:
+        return jsonify({
+            "success": False,
+            "error": "LangGraph implementation not available"
+        }), 500
+        
+    # Get request data
+    data = request.json
+    query = data.get("query")
+    execute = data.get("execute", True)
+    domain = data.get("domain")  # Optional specified domain
+    
+    # Get conversation history if provided
+    history = data.get("history", [])
+    
+    if not query:
+        return jsonify({
+            "success": False,
+            "error": "Query is required"
+        }), 400
+        
+    try:
+        # Convert any history to the format expected by LangGraph
+        graph_history = []
+        if history:
+            for turn in history:
+                role = turn.get('role', '').lower()
+                content = turn.get('content', '')
+                if role == 'user':
+                    from langchain_core.messages import HumanMessage
+                    graph_history.append(HumanMessage(content=content))
+                elif role == 'assistant':
+                    from langchain_core.messages import AIMessage
+                    graph_history.append(AIMessage(content=content))
+
+        # Process using LangGraph
+        query_id = f"lg_{int(time.time())}"
+        
+        # Create initial state with conversation history
+        initial_state = {
+            "messages": graph_history + [lgi.HumanMessage(content=query)],
+            "domain": domain if domain else "",
+            "schema_content": "",
+            "cheatsheet_content": "",
+            "pydough_code": "",
+            "explanation": None,
+            "execution_result": None,
+            "error": None
+        }
+        
+        # Build the graph
+        graph = lgi.build_pydough_query_graph(execute_code=execute)
+        
+        # Run the graph
+        final_state = graph.invoke(initial_state)
+        
+        # Check for error
+        if final_state.get("error"):
+            return jsonify({
+                "success": False,
+                "error": final_state["error"]
+            }), 500
+            
+        # Prepare response
+        pydough_code = final_state.get("pydough_code", "")
+        execution_result = final_state.get("execution_result", {})
+        
+        # Format messages for the response
+        messages = []
+        for message in final_state.get("messages", []):
+            if isinstance(message, lgi.HumanMessage):
+                messages.append({
+                    "role": "user",
+                    "content": message.content
+                })
+            elif isinstance(message, lgi.AIMessage):
+                messages.append({
+                    "role": "assistant",
+                    "content": message.content
+                })
+        
+        # Create the response
+        response = {
+            "success": True,
+            "query": query,
+            "query_id": query_id,
+            "domain": final_state.get("domain", "Unknown"),
+            "pydough_code": pydough_code,
+            "execution": execution_result if execution_result else None,
+            "messages": messages,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        print(f"Error processing query with LangGraph: {e}")
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 if __name__ == "__main__":
     # Show status message about PyDough availability

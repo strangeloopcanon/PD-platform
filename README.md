@@ -214,6 +214,9 @@ This script will:
   - LLM 0.25+ (Simon Willison's LLM library)
   - LLM-Gemini 0.19+ for Google Gemini integration
   - Supported models: Gemini 2.5 Pro Preview, Gemini 2.0 Flash
+- **State Management**:
+  - LangGraph 0.0.24+ for improved conversational workflow (optional)
+  - LangChain Core for structured message handling
 - **Data Validation**: Pydantic 2.4+
 - **Environment Management**: python-dotenv 1.0+
 
@@ -243,4 +246,53 @@ This script will:
 ### Authentication & Security
 - Requires Google Gemini API key for LLM functionality
 - Key management via LLM CLI tool or environment variables
+
+## LangGraph Integration
+
+The PyDough platform includes an optional LangGraph implementation that provides improved state management and conversational workflow. This implementation offers several advantages:
+
+### Features
+
+- **Structured State Management**: Maintains conversation history and domain context between turns
+- **Clear Workflow Definition**: Uses a graph-based approach to define the query processing pipeline
+- **Improved Domain Detection**: More reliable domain detection with error handling
+- **Enhanced Code Generation**: Better prompting for PyDough code generation
+- **Streaming Responses**: Support for streaming responses during interactive mode
+
+### Usage
+
+1. **Install LangGraph Dependencies**:
+   ```bash
+   cd text_to_pydough
+   ./setup_langgraph.sh
+   ```
+
+2. **Use Interactive Mode with LangGraph**:
+   ```bash
+   python langgraph_interactive.py
+   ```
+
+3. **Use the LangGraph API Endpoint**:
+   Send POST requests to `/api/query-lg` with the following format:
+   ```json
+   {
+     "query": "Your natural language query",
+     "execute": true,
+     "domain": "optional_domain_name",
+     "history": [
+       {"role": "user", "content": "previous query"},
+       {"role": "assistant", "content": "previous response"}
+     ]
+   }
+   ```
+
+### Implementation Details
+
+The LangGraph implementation includes:
+
+- `langgraph_impl.py`: Core graph definition with nodes for domain detection, code generation, and execution
+- `langgraph_interactive.py`: Interactive CLI using the LangGraph implementation
+- `requirements-langgraph.txt`: Dependencies for LangGraph functionality
+
+You can check if LangGraph is available via the `/api/status` endpoint, which includes a `langgraph_available` field.
 
