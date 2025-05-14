@@ -248,33 +248,36 @@ def execute_code_node(state: QueryState) -> Dict:
     )
     
     try:
-        # Create temporary script file
+        # Create temporary script file name (just the name, not the full path yet)
         output_file_name = f"temp_{domain_name}_query.py"
         
-        # Adapt and execute code
-        adapted_code_content = adapt_and_execute_code(
+        # Adapt and execute code - this function returns (adapted_code_content, output_file_path)
+        adapted_code_content, output_file_path = adapt_and_execute_code(
             pydough_code, 
             output_file_name, 
             domain_info
         )
         
         if adapted_code_content:
-            # Execute the script
-            execution_result = execute_pydough_script(output_file_name)
+            # Execute the script using the full output_file_path from adapt_and_execute_code
+            execution_result = execute_pydough_script(output_file_path)
             
             # Format result for display
             if execution_result["success"]:
                 result_text = "Execution successful!\n\n"
-                if "result_data" in execution_result and execution_result["result_data"]:
-                    # For DataFrame results
-                    if "pandas_df" in execution_result["result_data"]:
-                        result_text += "Result (first 5 rows):\n"
-                        df_str = execution_result["result_data"]["pandas_df"]
-                        result_text += df_str + "\n"
-                    else:
-                        result_text += f"Result: {execution_result['result_data']['result_str']}\n"
+                # Check if the execution output itself contains structured result data
+                # This part might need adjustment based on how execute_pydough_script structures its return
+                if "output" in execution_result and execution_result["output"]:
+                    # A simple way to show output, might need more sophisticated parsing for tables
+                    # Example: if pandas_df is in output, format as table
+                    if "SQL Query:" in execution_result["output"] and "Result:" in execution_result["output"]:
+                         result_text += execution_result["output"]
+                    else: # Fallback for other kinds of output
+                         result_text += f"Raw output:\n{execution_result['output']}"
+                else:
+                    result_text += "No specific result data found in execution output."
             else:
-                result_text = f"Execution failed: {execution_result['error']}"
+                result_text = f"Execution failed: {execution_result.get('error', 'Unknown error')}"
             
             # Return updates to state
             return {
@@ -305,6 +308,7 @@ def should_execute_code(state: QueryState) -> Literal["execute_code_node", "END"
 # Build the graph
 def build_pydough_query_graph(execute_code: bool = True) -> StateGraph:
     """Build the LangGraph for PyDough query processing."""
+    # Create builder using newer LangGraph API
     builder = StateGraph(QueryState)
     
     # Add nodes
@@ -332,14 +336,17 @@ def build_pydough_query_graph(execute_code: bool = True) -> StateGraph:
     else:
         builder.add_edge("generate_code", END)
     
-    # Compile and return the graph
-    return builder.compile()
+    # Return the graph (don't call .compile() - it's handled differently in newer versions)
+    return builder
 
 # Function to process a query using the LangGraph
 def process_query_with_graph(query_text: str, execute_code: bool = True):
     """Process a natural language query using the LangGraph workflow."""
-    # Build the graph
-    graph = build_pydough_query_graph(execute_code=execute_code)
+    # Build the graph builder
+    graph_builder = build_pydough_query_graph(execute_code=execute_code)
+    
+    # Compile the graph (no checkpointer needed for this simple test)
+    compiled_graph = graph_builder.compile()
     
     # Initialize state with query
     initial_state = {
@@ -353,8 +360,8 @@ def process_query_with_graph(query_text: str, execute_code: bool = True):
         "error": None
     }
     
-    # Invoke the graph with the initial state
-    final_state = graph.invoke(initial_state)
+    # Invoke the compiled graph
+    final_state = compiled_graph.invoke(initial_state)
     
     return final_state
 

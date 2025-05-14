@@ -96,7 +96,8 @@ def interactive_mode(args):
     
     # Build the graph with checkpointer
     graph = build_pydough_query_graph(execute_code=not args.no_execute)
-    compiled_graph = graph.compile(checkpointer=checkpointer)
+    # Add the compile step back for LangGraph 0.0.24
+    graph = graph.compile(checkpointer=checkpointer)
     
     # Initialize the session state
     config = None
@@ -139,43 +140,32 @@ def interactive_mode(args):
                     }
                     config = {"configurable": {"thread_id": f"thread-{datetime.now().timestamp()}"}}
                     
-                    # Use stream for a better interactive experience
+                    # Use invoke() for CompiledStateGraph
                     print("\n🔄 Response:")
-                    for event in compiled_graph.stream(initial_state, config=config, stream_mode="updates"):
-                        # Print the updates as they happen
-                        for node_name, update in event.items():
-                            if "messages" in update and update["messages"]:
-                                for message in update["messages"]:
-                                    if isinstance(message, AIMessage):
-                                        print(f"🤖 {message.content}")
+                    result = graph.invoke(initial_state, config=config)
+                    
+                    # Display the messages
+                    if "messages" in result:
+                        for message in result["messages"]:
+                            if isinstance(message, AIMessage):
+                                print(f"🤖 {message.content}")
                 else:
-                    # For continuing the conversation, just update with the new message
-                    current_state = compiled_graph.get_state(config)
+                    # For continuing the conversation, use invoke() for CompiledStateGraph
+                    input_state = {"messages": [HumanMessage(content=query)]}
                     
-                    # Update the state with a new user message
-                    new_config = compiled_graph.update_state(
-                        config,
-                        {"messages": [HumanMessage(content=query)]},
-                    )
-                    
-                    # Stream the response
                     print("\n🔄 Response:")
-                    for event in compiled_graph.stream({}, config=new_config, stream_mode="updates"):
-                        # Print the updates as they happen
-                        for node_name, update in event.items():
-                            if "messages" in update and update["messages"]:
-                                for message in update["messages"]:
-                                    if isinstance(message, AIMessage):
-                                        print(f"🤖 {message.content}")
+                    result = graph.invoke(input_state, config=config)
                     
-                    # Update the config reference for next iteration
-                    config = new_config
+                    # Display the messages
+                    if "messages" in result:
+                        for message in result["messages"]:
+                            if isinstance(message, AIMessage):
+                                print(f"🤖 {message.content}")
                 
-                # Get the final state to add to history
-                final_state = compiled_graph.get_state(config)
-                domain = final_state.get("domain", "Unknown")
-                pydough_code = final_state.get("pydough_code", "")
-                error = final_state.get("error")
+                # Store results for history
+                domain = result.get("domain", "Unknown")
+                pydough_code = result.get("pydough_code", "")
+                error = result.get("error")
                 
                 if error:
                     print(f"\n⚠️ Error: {error}")
@@ -187,7 +177,7 @@ def interactive_mode(args):
                     "timestamp": datetime.now().isoformat()
                 })
                 
-                for message in final_state.get("messages", []):
+                for message in result.get("messages", []):
                     if isinstance(message, AIMessage):
                         conversation_history.append({
                             "role": "assistant",
