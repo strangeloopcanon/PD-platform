@@ -24,10 +24,14 @@ A web interface for interacting with the PyDough query processor. This platform 
 -   **Query History:** Saves and manages your past queries and their results within a session.
 -   **(Backend) Structured LLM Output:** Ensures more reliable code generation.
 -   **(Backend) LLM-based Domain Detection:** Automatically identifies the relevant data domain for your query.
+-   **(New) Robust Response Parsing:** Enhanced extraction techniques ensure PyDough code is reliably captured from various LLM response formats.
+-   **(New) Improved Error Handling:** Better handling of errors during code generation and execution.
+-   **(New) Naming Consistency:** Fixed naming inconsistencies between backend and frontend (snake_case vs. camelCase).
+-   **(New) SQL Parsing:** Improved extraction of SQL queries from execution results.
 
 ## Screenshots
 
-*(Please replace the placeholders below with actual screenshots of the application.)*
+Here's what the platform looks like.
 
 **1. Main Query Interface:**
    ![Main Query Interface](docs/images/main_interface.png)
@@ -54,6 +58,7 @@ A web interface for interacting with the PyDough query processor. This platform 
     -   `data/`: Contains database schema (`.json`) and metadata (`.md`) files. **Note:** Large database (`.db`) files are not included in the repository due to size limits and must be obtained or generated separately.
     -   `app.py`: Flask API server.
     -   `pydough_query_processor.py`: Core LLM, PyDough, and SQL generation logic.
+    -   `langgraph_impl.py`: Optional LangGraph implementation for structured conversation flow.
     -   `requirements.txt`: Python dependencies.
 -   `start.sh`: Script to run both frontend and backend concurrently.
 -   `.gitignore`: Specifies intentionally untracked files (like `.db` files, `venv`, `.env`).
@@ -163,20 +168,23 @@ This script will:
     b.  **Schema Loading:** The backend loads the relevant schema information (`.json` and `.md` files) for the identified domain.
     c.  **LLM Prompting for PyDough:** A carefully crafted prompt, including the user query, schema details, and examples, is sent to the LLM (e.g., Gemini).
     d.  **PyDough Generation:** The LLM returns structured output containing the generated PyDough code and an explanation.
+    e.  **Robust Extraction:** Multiple approaches are used to reliably extract structured data from the LLM response, improving resilience against various output formats.
 4.  **PyDough to SQL (Optional):** If auto-execution is enabled or triggered:
     a.  The generated PyDough code is processed by the PyDough library.
     b.  This process translates the PyDough code into an SQL query.
 5.  **SQL Execution (Optional):**
     a.  The generated SQL query is executed against the corresponding domain's database file (e.g., `tpch.db`).
+    b.  Results are processed and formatted for frontend display, with improved handling of tabular data.
 6.  **Response to Frontend:** The backend sends a JSON response to the frontend containing:
     -   The natural language query.
     -   The generated PyDough code.
     -   The generated SQL query.
     -   The results from SQL execution (if performed).
     -   Any explanations or error messages.
+    -   Field names maintain both naming conventions for compatibility: `pydough_code` (snake_case for backend) and `pydoughCode` (camelCase for frontend).
 7.  **Frontend Display:** The frontend receives the response and updates the UI:
     -   The "Results" tab displays the query output (as text or a table).
-    -   The "PyDough Code" tab displays the generated PyDough.
+    -   The "PyDough Code" tab displays the generated PyDough code.
     -   The "SQL" tab displays the generated SQL.
     -   The conversation history is updated.
 
@@ -191,6 +199,21 @@ This script will:
 -   **Branching Strategy:** Use feature branches (`git checkout -b feature/your-feature-name`) for new work and create Pull Requests (PRs) for merging changes into the main branch (e.g., `main` or `develop`).
 -   **Linting and Formatting:** Consider adding linters (e.g., ESLint for frontend, Pylint/Flake8 for backend) and formatters (e.g., Prettier for frontend, Black for backend) to maintain code consistency.
 -   **Error Handling:** Continuously improve error handling in both frontend and backend to provide informative messages to the user.
+-   **Response Format Flexibility:** The backend uses multiple extraction approaches to handle various response formats from the LLM, improving reliability in code extraction.
+
+## Recent Improvements
+
+### Backend Enhancements
+- **Structured Response Parsing**: Multiple fallback mechanisms to extract code from LLM responses in different formats
+- **Consistent API Response Format**: Added both `pydough_code` (snake_case) and `pydoughCode` (camelCase) for compatibility across backend and frontend
+- **Enhanced Schema Information**: Improved schema information included in LLM prompts to generate more accurate PyDough code, including collection names and key properties
+- **Improved Error Handling**: Better handling of errors during code generation and execution with informative messages
+- **SQL Parsing**: Enhanced extraction of SQL queries from execution results
+
+### Frontend Improvements
+- **Tabular Data Handling**: Better rendering of SQL query results as formatted tables
+- **Error Message Display**: Improved visualization of error messages
+- **Responsive UI Components**: Enhanced layout and responsiveness of UI components
 
 ## Technology Stack
 
@@ -295,4 +318,22 @@ The LangGraph implementation includes:
 - `requirements-langgraph.txt`: Dependencies for LangGraph functionality
 
 You can check if LangGraph is available via the `/api/status` endpoint, which includes a `langgraph_available` field.
+
+## Troubleshooting Common Issues
+
+### LLM Response Parsing
+If you encounter issues with code generation, check the backend logs for debugging information. The system uses multiple fallback mechanisms to extract code from LLM responses:
+1. Direct structured response parsing via Pydantic models
+2. JSON attribute extraction
+3. Regex-based extraction
+4. Raw response parsing
+
+### Frontend-Backend Communication
+Issues with data display might be related to naming inconsistencies. The backend now provides both snake_case and camelCase versions of key properties for compatibility.
+
+### Database Connectivity
+Ensure database files are correctly named and placed in the `text_to_pydough/data/` directory. The system requires matching between domain configurations and actual file names.
+
+### Performance Considerations
+For large datasets, consider adding pagination or limiting the results displayed. The current implementation shows the first 10 rows of query results by default.
 
