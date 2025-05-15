@@ -309,6 +309,8 @@ The PyDough platform includes an optional LangGraph implementation that provides
    }
    ```
 
+**Note on Frontend Integration:** While the backend supports LangGraph through its dedicated API endpoint (`/api/query-lg`) and the `langgraph_interactive.py` script, the frontend UI (e.g., any toggles or buttons related to LangGraph) may not yet be fully wired up to control or accurately reflect the LangGraph operational status. Direct API calls or the interactive script are the primary ways to utilize the LangGraph features at this time.
+
 ### Implementation Details
 
 The LangGraph implementation includes:
