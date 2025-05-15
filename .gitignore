@@ -162,3 +162,5 @@ cython_debug/
 text_to_pydough/data/tpch.db
 text_to_pydough/data/tpch.db
 bfg.jar
+text_to_pydough/venv
+text_to_pydough/results

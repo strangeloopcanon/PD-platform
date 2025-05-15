@@ -106,7 +106,6 @@ const MetadataPage: React.FC = () => {
       {(pageIsLoading || isContextLoading) && (
         <div className="text-center py-4">
           <p className="text-sm text-gray-500">Loading metadata...</p>
-          {/* You could add a spinner here */}
         </div>
       )}
 
@@ -131,7 +130,6 @@ const MetadataPage: React.FC = () => {
 
       {connectedDbsWithMetadata.map(db => {
         const currentDomainMeta = domainMetadata[db.name];
-        console.log(`[MetadataPage] Domain: ${db.name}, Metadata received:`, currentDomainMeta); // Diagnostic log
 
         let tablesToShow: TableInfo[] = [];
         if (currentDomainMeta) {

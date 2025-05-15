@@ -215,7 +215,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setError(null);
     
     try {
-      console.log("Scanning for available databases...");
       const response = await fetch(`${API_BASE_URL}/databases`);
       const data = await response.json();
       
@@ -258,7 +257,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           [domain]: data.metadata
         }));
         
-        console.log(`Loaded metadata for domain: ${domain}`, data.metadata);
       } else {
         setError(data.error || `Failed to load metadata for ${domain}`);
       }
@@ -276,7 +274,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setError(null);
     
     try {
-      console.log(`Attempting to connect to ${domain}...`);
       const response = await fetch(`${API_BASE_URL}/connect`, {
         method: 'POST',
         headers: {
@@ -286,7 +283,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       
       const data = await response.json();
-      console.log(`Connection response for ${domain}:`, data);
       
       if (data.success) {
         // Update connection status for the specific database
@@ -387,9 +383,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       
       const data = await response.json();
-      
-      // --- DEBUG LOG --- 
-      console.log(`Received data from ${endpoint}:`, JSON.stringify(data, null, 2));
       
       // Detect and handle executeCode error here
       window.addEventListener('error', (event) => {
@@ -646,7 +639,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setQueryResults(null);
     setDetectedDomain(null);
     setCurrentQuery(''); // Optionally clear the input box too
-    console.log("Conversation history cleared.");
   };
 
   const contextValue: AppContextProps = {

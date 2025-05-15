@@ -4,7 +4,6 @@ import { ChevronRight, Play, Database, Save, Code, FileX, Download, CheckCircle,
 import { useAppContext } from '../context/AppContext';
 import Editor from '@monaco-editor/react';
 
-// Add new ApiKeySetup component
 const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
   const [apiKey, setApiKey] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -111,7 +110,6 @@ const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
   );
 };
 
-// --- Re-introduce QueryResultsDisplay here or import if separate --- 
 const tableStyles = `
   .results-table {
     width: 100%;
@@ -136,6 +134,7 @@ const tableStyles = `
     border-bottom: 1px solid #e5e7eb;
   }
 `;
+
 const QueryResultsDisplay = ({ results }: { results: string | null }) => {
   if (!results) return null;
   const containsHtml = results.trim().startsWith('<') && results.includes('>');
@@ -153,7 +152,6 @@ const QueryResultsDisplay = ({ results }: { results: string | null }) => {
     </div>
   );
 };
-// --- End QueryResultsDisplay --- 
 
 const QueryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -231,14 +229,11 @@ const QueryPage: React.FC = () => {
   const handleSubmitQuery = async () => {
     if (!currentQuery.trim()) return;
     
-    console.log("handleSubmitQuery called in QueryPage.tsx");
     setProcessingError(null);
     setError(null);
     
     try {
-      console.log(`Calling processQuery with autoExecute: ${autoExecute}`);
       const queryGenResult = await processQuery(currentQuery, autoExecute, selectedDomain);
-      console.log("processQuery call finished in QueryPage.tsx");
       
       if (queryGenResult?.error && !queryGenResult?.success) {
         console.error("Error reported by processQuery:", queryGenResult.error);
@@ -281,14 +276,12 @@ const QueryPage: React.FC = () => {
     }
   };
   
-  // NEW: Handle starting a new conversation
+  // Handle starting a new conversation
   const handleNewConversation = () => {
     clearConversationHistory();
     setCurrentQuery(''); // Clear current query input
-    // queryResults, generatedCode, generatedSQL are cleared in AppContext or will be on next query
     setProcessingError(null); // Clear local error display
     setError(null); // Clear global error
-    console.log("New conversation started. History cleared.");
   };
   
   if (needsApiKey) {
@@ -447,7 +440,6 @@ const QueryPage: React.FC = () => {
           
           <div className="mt-2 md:mt-0 flex-shrink-0">
             <div className="flex items-center space-x-2">
-              {/* Domain selector dropdown removed - using auto-detection */}
               
               <button
                 type="submit"
@@ -491,6 +483,14 @@ const QueryPage: React.FC = () => {
           )}
         </div>
       </div>
+      
+      {/* Loading Indicator for Query Processing */}
+      {isLoading && (
+        <div className="mt-6 text-center py-4">
+          <RefreshCw className="animate-spin h-8 w-8 text-primary-600 mx-auto" />
+          <p className="mt-2 text-sm text-gray-600">Processing your query, please wait...</p>
+        </div>
+      )}
       
       {processingError && (
         <div className="mt-4 bg-red-50 border-l-4 border-red-400 p-4">

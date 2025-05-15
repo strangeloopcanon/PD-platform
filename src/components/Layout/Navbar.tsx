@@ -52,7 +52,7 @@ const Navbar: React.FC = () => {
               <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-medium">
                 RK
               </div>
-              <span className="mx-2 hidden md:block">Rohit K</span>
+              <span className="mx-2 hidden md:block">Rohit Krishnan</span>
               <ChevronDown className="w-4 h-4" />
             </button>
             
