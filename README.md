@@ -190,7 +190,7 @@ This script will:
 
 ## Development Notes
 
--   **Repository Hygiene:** Avoid committing large files (like `.db` databases), secrets, or generated files (`venv`, `node_modules`, `dist`, `__pycache__`). Use the `.gitignore` file to prevent this. If you accidentally commit a large file, you may need to remove it from the Git history using tools like [BFG Repo-Cleaner](https://rtyley.github.io/bfg-repo-cleaner/) or `git filter-branch`.
+-   **Repository Hygiene:** Avoid committing large files (like `.db` databases), secrets, or generated files (`venv`, `node_modules`, `dist`, `__pycache__`). Use the `.gitignore` file to prevent this. If you accidentally committed a large file, you may need to remove it from the Git history using tools like [BFG Repo-Cleaner](https://rtyley.github.io/bfg-repo-cleaner/) or `git filter-branch`.
 -   **Adding New Domains:**
     1.  Add a new schema definition file (e.g., `new_domain_schema.json`) to `text_to_pydough/data/`.
     2.  Add a corresponding metadata/description file (e.g., `new_domain.md`) to `text_to_pydough/data/`. This file provides natural language descriptions of collections and properties to the LLM.
