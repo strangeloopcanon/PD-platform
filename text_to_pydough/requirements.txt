@@ -1,0 +1,9 @@
+flask>=2.3.3
+flask-cors>=4.0.0
+pandas>=2.1.0
+llm>=0.25
+llm-gemini>=0.19.1
+pydantic>=2.4.2
+tqdm>=4.66.1
+pydough>=0.1.0
+python-dotenv>=1.0.0 

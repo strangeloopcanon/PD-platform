@@ -1,187 +1,328 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Database, Lock, Key, Server } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Database, Server, CheckCircle, XCircle, RefreshCw, Zap } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 
 const ConnectionPage: React.FC = () => {
-  const navigate = useNavigate();
-  const { setConnectionStatus } = useAppContext();
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const { 
+    availableDatabases, 
+    scanDatabases, 
+    connectDatabase, 
+    connectionStatus,
+    isLoading,
+    error,
+    setError
+  } = useAppContext();
   
-  const [formData, setFormData] = useState({
-    accountName: 'mock-account-123',
-    username: 'mock_user',
-    password: 'mock_password',
-    warehouse: 'MOCK_WH',
-    database: 'MOCK_SALES_DB',
-    schema: 'PUBLIC',
-  });
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsConnecting(true);
-    setConnectionError(null);
-    
-    // Simulate connection request
-    setTimeout(() => {
-      if (formData.accountName && formData.username && formData.password) {
-        setConnectionStatus(true);
-        setIsConnecting(false);
-        navigate('/metadata');
-      } else {
-        setConnectionError('Connection failed. Please check your credentials and try again.');
-        setIsConnecting(false);
+  const [isConnecting, setIsConnecting] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [autoConnectComplete, setAutoConnectComplete] = useState<boolean>(false);
+  
+  // When global error changes, update our local error
+  useEffect(() => {
+    if (error) {
+      setConnectionError(error);
+    }
+  }, [error]);
+  
+  // Auto-connect to all databases when they are loaded
+  useEffect(() => {
+    const connectAllDatabases = async () => {
+      if (!autoConnectComplete && availableDatabases.length > 0 && !connectionStatus) {
+        setAutoConnectComplete(true); // Prevent multiple connection attempts
+        
+        // Find the first database that exists and connect to it
+        const databasesToConnect = availableDatabases.filter(db => !db.connected);
+        
+        if (databasesToConnect.length > 0) {
+          setIsConnecting('all');
+          try {
+            // Connect to the first database that exists
+            for (const db of databasesToConnect) {
+              if (db.exists) {
+                await connectDatabase(db.name);
+                break; // Connect to only one database initially
+              }
+            }
+          } catch (error) {
+            console.error('Auto-connection error:', error);
+          } finally {
+            setIsConnecting(null);
+          }
+        }
       }
-    }, 1500);
+    };
+    
+    connectAllDatabases();
+  }, [availableDatabases, connectionStatus, autoConnectComplete, connectDatabase]);
+  
+  // Rescan databases
+  const handleRescan = async () => {
+    setConnectionError(null);
+    setError(null);
+    setAutoConnectComplete(false); // Reset auto-connect flag
+    await scanDatabases();
+  };
+  
+  // Connect to a database
+  const handleConnect = async (domainName: string) => {
+    setIsConnecting(domainName);
+    setConnectionError(null);
+    setError(null);
+    
+    try {
+      const success = await connectDatabase(domainName);
+      
+      if (!success) {
+        setConnectionError(`Failed to connect to ${domainName}`);
+      }
+    } catch (error) {
+      setConnectionError(`Error connecting to ${domainName}: ${error}`);
+      console.error('Connection error:', error);
+    } finally {
+      setIsConnecting(null);
+    }
   };
 
-  const connectionFields = [
-    { name: 'accountName', label: 'Account Name', placeholder: 'your-account', icon: Database, required: true },
-    { name: 'username', label: 'Username', placeholder: 'username', icon: Server, required: true },
-    { name: 'password', label: 'Password', placeholder: '••••••••', type: 'password', icon: Lock, required: true },
-    { name: 'warehouse', label: 'Warehouse', placeholder: 'COMPUTE_WH', icon: Database },
-    { name: 'database', label: 'Database', placeholder: 'SALES', icon: Database },
-    { name: 'schema', label: 'Schema', placeholder: 'PUBLIC', icon: Database },
-  ];
-
-  const testConnectionConfigs = [
-    { name: 'Sample Sales Database', description: 'Contains sample sales data for testing' },
-    { name: 'E-commerce Database', description: 'Sample e-commerce transactional data' },
-    { name: 'Financial Analytics DB', description: 'Financial data for analytics testing' },
-  ];
+  // Connect to all databases
+  const handleConnectAll = async () => {
+    setIsConnecting('all');
+    setConnectionError(null);
+    setError(null);
+    
+    try {
+      // Process databases sequentially to ensure reliable connections
+      console.log("Starting to connect all databases...");
+      
+      for (const db of availableDatabases) {
+        if (!db.connected && db.exists) {
+          console.log(`Connecting to ${db.name}...`);
+          await connectDatabase(db.name);
+          // Add a small delay between connections
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      }
+      
+      console.log("All database connections complete");
+    } catch (error) {
+      setConnectionError(`Error connecting to databases: ${error}`);
+      console.error('Connection error:', error);
+    } finally {
+      setIsConnecting(null);
+    }
+  };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="py-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Connect to Snowflake</h1>
-        <p className="mt-2 text-sm text-gray-700">
-          Connect to your Snowflake database to start analyzing your data
-        </p>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {!connectionStatus && availableDatabases.length > 0 && (
+        <div className="mb-8 bg-blue-50 border-2 border-blue-300 rounded-lg p-6 shadow-lg">
+          <div className="flex flex-col md:flex-row items-center justify-between">
+            <div className="mb-4 md:mb-0">
+              <h2 className="text-lg font-semibold text-blue-800">Quick Start</h2>
+              <p className="text-blue-600">
+                Connect to all available databases with a single click to start querying.
+              </p>
+            </div>
+            <button
+              onClick={handleConnectAll}
+              className="animate-pulse w-full md:w-auto inline-flex justify-center items-center px-6 py-3 border border-transparent shadow-lg text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={isLoading || isConnecting === 'all'}
+            >
+              <Zap className="h-6 w-6 mr-2" />
+              {isConnecting === 'all' ? 'Connecting...' : 'Connect All Databases'}
+            </button>
+          </div>
+        </div>
+      )}
 
-        <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
-          <div className="md:col-span-2">
-            <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">Connection Details</h3>
-                
-                {connectionError && (
-                  <div className="mt-4 bg-red-50 border-l-4 border-red-400 p-4">
-                    <div className="flex">
-                      <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
-                        </svg>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-semibold text-gray-900">Database Connections</h1>
+        <div className="flex space-x-2">
+          {!connectionStatus && availableDatabases.some(db => !db.connected && db.exists) && (
+            <button
+              onClick={handleConnectAll}
+              className="inline-flex items-center px-3 py-2 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              disabled={isLoading || isConnecting === 'all'}
+            >
+              {isConnecting === 'all' ? (
+                <>
+                  <RefreshCw className="animate-spin h-4 w-4 mr-2" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <Database className="h-4 w-4 mr-2" />
+                  Connect All
+                </>
+              )}
+            </button>
+          )}
+          <button 
+            onClick={handleRescan}
+            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            {isLoading ? 'Scanning...' : 'Rescan'}
+          </button>
+        </div>
+      </div>
+      
+      {connectionError && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <XCircle className="h-5 w-5 text-red-400" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{connectionError}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {connectionStatus && (
+        <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <CheckCircle className="h-5 w-5 text-green-400" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-green-700">
+                Connected successfully! You can now explore metadata, run queries, or analyze data.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <div className="bg-white shadow overflow-hidden sm:rounded-md">
+        <ul className="divide-y divide-gray-200">
+          {isLoading && availableDatabases.length === 0 ? (
+            <li className="px-4 py-5 sm:px-6 text-center">
+              <RefreshCw className="h-8 w-8 text-gray-400 mx-auto animate-spin" />
+              <p className="mt-2 text-gray-500">Scanning for available databases...</p>
+            </li>
+          ) : availableDatabases.length > 0 ? (
+            availableDatabases.map((database) => (
+              <li key={database.name}>
+                <div className="px-4 py-5 sm:px-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 bg-primary-100 rounded-md p-2">
+                        <Database className="h-6 w-6 text-primary-600" />
                       </div>
-                      <div className="ml-3">
-                        <p className="text-sm text-red-700">{connectionError}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                    {connectionFields.map((field) => (
-                      <div key={field.name}>
-                        <label htmlFor={field.name} className="block text-sm font-medium text-gray-700">
-                          {field.label} {field.required && <span className="text-red-500">*</span>}
-                        </label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <field.icon className="h-5 w-5 text-gray-400" aria-hidden="true" />
-                          </div>
-                          <input
-                            type={field.type || 'text'}
-                            name={field.name}
-                            id={field.name}
-                            className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
-                            placeholder={field.placeholder}
-                            required={field.required}
-                            value={formData[field.name as keyof typeof formData]}
-                            onChange={handleChange}
-                          />
+                      <div className="ml-4">
+                        <h3 className="text-lg font-medium text-gray-900">{database.name}</h3>
+                        <p className="text-sm text-gray-500">
+                          <span className="font-medium">File:</span> {database.databaseFile}
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {database.keywords.slice(0, 5).map((keyword, idx) => (
+                            <span 
+                              key={idx} 
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+                            >
+                              {keyword}
+                            </span>
+                          ))}
+                          {database.keywords.length > 5 && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              +{database.keywords.length - 5} more
+                            </span>
+                          )}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                  
-                  <div className="pt-3 border-t border-gray-200">
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                      >
-                        Test Connection
-                      </button>
-                      <button
-                        type="submit"
-                        className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                        disabled={isConnecting}
-                      >
-                        {isConnecting ? (
-                          <>
-                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Connecting...
-                          </>
-                        ) : 'Connect'}
-                      </button>
+                    </div>
+                    
+                    <div className="flex items-center">
+                      {database.connected ? (
+                        <div className="flex items-center text-green-600 mr-4">
+                          <CheckCircle className="h-5 w-5 mr-1" />
+                          <span className="text-sm font-medium">Connected</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                          onClick={() => handleConnect(database.name)}
+                          disabled={isConnecting === database.name || !database.exists}
+                        >
+                          {isConnecting === database.name ? (
+                            <>
+                              <RefreshCw className="animate-spin h-4 w-4 mr-2" />
+                              Connecting...
+                            </>
+                          ) : !database.exists ? (
+                            <>
+                              <XCircle className="h-4 w-4 mr-2" />
+                              Missing File
+                            </>
+                          ) : (
+                            <>
+                              <Server className="h-4 w-4 mr-2" />
+                              Connect
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
-                </form>
-              </div>
+                </div>
+              </li>
+            ))
+          ) : (
+            <li className="px-4 py-5 sm:px-6 text-center">
+              <p className="text-gray-500">No databases found. Try rescanning or check the data folder.</p>
+            </li>
+          )}
+        </ul>
+      </div>
+      
+      <div className="mt-8 bg-white shadow sm:rounded-md p-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Connection Information</h2>
+        
+        <div className="bg-gray-50 p-4 rounded-md">
+          <p className="text-sm text-gray-600">
+            This page allows you to connect to databases discovered in the data directory.
+            Each database corresponds to a domain (Broker, Dealership, etc.) in the PyDough system.
+          </p>
+          
+          {connectionError && connectionError.includes("backend API") && (
+            <div className="mt-4 p-4 border border-yellow-300 bg-yellow-50 rounded-md">
+              <h3 className="text-sm font-medium text-yellow-800">Running in Demo Mode</h3>
+              <p className="mt-1 text-sm text-yellow-700">
+                The backend API is running in mock/demo mode. Some functionality may be limited,
+                but you can still explore the interface.
+              </p>
+              <button
+                onClick={() => {
+                  // Force a mock connection in demo mode
+                  setConnectionError(null);
+                  setError(null);
+                  handleConnectAll();
+                }}
+                className="mt-2 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+              >
+                Connect Demo Database
+              </button>
             </div>
+          )}
+
+          <div className="mt-4">
+            <h3 className="text-sm font-medium text-gray-900">Currently supported domains:</h3>
+            <ul className="mt-2 text-sm text-gray-600 space-y-1 list-disc list-inside">
+              <li>Broker - Stock brokerage data</li>
+              <li>Dealership - Automotive dealership management</li>
+              <li>DermTreatment - Dermatology clinic information</li>
+              <li>Ewallet - Digital wallet transactions</li>
+              <li>TPCH - Standard TPC-H benchmark database</li>
+            </ul>
           </div>
           
-          <div className="space-y-4">
-            <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-sm font-medium text-gray-900">Connection Help</h3>
-                <div className="mt-2 text-sm text-gray-500">
-                  <p>The account name is typically your Snowflake account identifier.</p>
-                  <p className="mt-2">Example: <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">company-account</code></p>
-                  <p className="mt-3">Need help finding your account details?</p>
-                  <a href="#" className="mt-2 inline-block text-primary-600 hover:text-primary-500">View Snowflake documentation →</a>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-sm font-medium text-gray-900">Test Connections</h3>
-                <p className="mt-1 text-xs text-gray-500">Use these pre-configured connections for testing:</p>
-                
-                <ul className="mt-3 space-y-3">
-                  {testConnectionConfigs.map((config, index) => (
-                    <li key={index} className="flex items-start">
-                      <button
-                        type="button"
-                        className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-primary-700 bg-primary-100 hover:bg-primary-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                      >
-                        <Key className="h-3.5 w-3.5 mr-1" />
-                        Use
-                      </button>
-                      <div className="ml-3">
-                        <p className="text-xs font-medium text-gray-900">{config.name}</p>
-                        <p className="text-xs text-gray-500">{config.description}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
+          <p className="mt-4 text-sm text-gray-600">
+            Once connected, you can explore metadata, run natural language queries,
+            and analyze data through the notebook interface.
+          </p>
         </div>
       </div>
     </div>
