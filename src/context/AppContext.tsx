@@ -49,7 +49,9 @@ interface DomainMetadata {
 }
 
 // API endpoints
-const API_BASE_URL = "http://localhost:5001/api";
+// Allow overriding the backend URL via Vite environment variable
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
 
 interface AppContextProps {
   // Original properties
