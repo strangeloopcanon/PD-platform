@@ -64,6 +64,10 @@ Here's what the platform looks like.
 -   `.gitignore`: Specifies intentionally untracked files (like `.db` files, `venv`, `.env`).
 -   `README.md`: This file.
 
+For a newcomer-friendly tour of the repository and suggestions on what to
+explore next, see
+[`docs/new_developer_guide.md`](docs/new_developer_guide.md).
+
 ## Prerequisites
 
 -   **Node.js:** v18 or later (for the frontend - check `package.json` for engine specifics).
