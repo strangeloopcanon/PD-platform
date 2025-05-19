@@ -123,7 +123,12 @@ explore next, see
         ```
     *   Alternatively, the application *may* fall back to an environment variable `GEMINI_API_KEY` if set in `text_to_pydough/.env`, but using `llm keys set gemini` is recommended.
 
-5.  **Obtain Database Files:**
+5.  **(Optional) Configure API Base URL:**
+    If your backend runs on a different host or port, create a `.env` file in
+    the project root and set `VITE_API_BASE_URL` to the base URL of the
+    backend API. See `.env.example` for the default value.
+
+6.  **Obtain Database Files:**
     -   The large `.db` files needed for the different data domains (e.g., `tpch.db`, `Broker.db`) are **not** included in this repository due to size constraints and are listed in `.gitignore`.
     -   You will need to place the required `.db` files into the `text_to_pydough/data/` directory for the application to connect to them. Ensure the filenames match those expected by the domain configurations (e.g., `tpch_demo_graph.json` references `tpch.db`).
 
