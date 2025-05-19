@@ -53,7 +53,7 @@ Here's what the platform looks like.
 -   `src/`: React frontend (Vite + TypeScript)
     -   `components/`: Reusable UI components
     -   `context/`: React context for application state (e.g., `AppContext.tsx`)
-    -   `pages/`: Main application pages (e.g., `Query.tsx`)
+    -   `pages/`: Main application pages (e.g., `QueryPage.tsx`)
 -   `text_to_pydough/`: Python backend (Flask API and Query Processor)
     -   `data/`: Contains database schema (`.json`) and metadata (`.md`) files. **Note:** Large database (`.db`) files are not included in the repository due to size limits and must be obtained or generated separately.
     -   `app.py`: Flask API server.
