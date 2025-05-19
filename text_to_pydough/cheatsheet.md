@@ -7,7 +7,7 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - Always use TOP_K instead of ORDER_BY when you need to order but also select a the high, low or an specific "k" number of records.
 
-  - If a query does not specify an specific year, and want that you calculate for all the year, for example “compare year over year”, then the requested calculation must be performed for each year available in TPC: 1995, 1996, 1995 and 1998. You need to use SINGULAR function to call every year in the final result. 
+  - If a query does not specify an specific year, and want that you calculate for all the year, for example “compare year over year”, then the requested calculation must be performed for each year available in TPC: 1995, 1996, 1997 and 1998. You need to use SINGULAR function to call every year in the final result. 
 
   - If you need to use an attribute of a previous collection, you must have calculated the attribute using CALCULATE.
 
@@ -17,7 +17,7 @@ This cheat sheet is a context for learning how to create PyDough code. You must 
 
   - When using functions like TOP_K, ORDER_BY, you must ALWAYS provide an expression, not a collection. Ensure that the correct type of argument is passed. For example, `supp_group.TOP_K(3, total_sales.DESC(na_pos='last')).CALCULATE(supplier_name=supplier_name, total_sales=total_sales)` is invalid because TOP_K expects an expression, not a collection. The “by” parameter must never have collections or subcollections 
 
-  - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. PARTITION does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `PARTTION(nations, name="nation", by=(name)).CALCULATE(nation_name=name,top_suppliers=nation.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection.
+  - PARTITION function ALWAYS need 3 parameters `Collection, name and by`. The “by” parameter must never have collections, subcollections or calculations. Any required variable or value must have been previously calculated, because the parameter only accept expressions. PARTITION does not support receiving a collection; you must ALWAYS provide an expression, not a collection. For example, you cannot do: `PARTITION(nations, name="nation", by=(name)).CALCULATE(nation_name=name,top_suppliers=nation.suppliers.TOP_K(3, by=SUM(lines.extended_price).DESC())` because TOP_K returns a collection.
 
   - PARTITION must always be used as a function. It should only be used as a method when performing calculations with the high-level graph. Never partition by the foreign key or the collection key.
   
