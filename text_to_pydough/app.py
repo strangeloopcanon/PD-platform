@@ -130,7 +130,7 @@ except ImportError as e:
             }
             self["TPCH"] = {
                 "keywords": ["supplier", "order", "lineitem", "customer", "nation"],
-                "metadata_file": "data/tpch_graph.json",
+                "metadata_file": "data/tpch_demo_graph.json",
                 "databaseFile": "data/tpch.db",
                 "exists": True
             }
@@ -393,7 +393,7 @@ def list_databases():
                     {
                         "name": "TPCH",
                         "keywords": ["supplier", "order", "lineitem", "customer", "nation"],
-                        "metadataFile": "data/tpch_graph.json",
+                        "metadataFile": "data/tpch_demo_graph.json",
                         "databaseFile": "data/tpch.db",
                         "exists": True
                     }
