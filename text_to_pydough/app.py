@@ -109,29 +109,31 @@ except ImportError as e:
             self["Broker"] = {
                 "keywords": ["customer", "ticker", "transaction", "stock", "price"],
                 "metadata_file": "data/Broker_graph.json",
-                "database_file": "data/Broker.db"
+                "database_file": "data/Broker.db",
+                "exists": True
             }
             self["Dealership"] = {
                 "keywords": ["car", "make", "model", "salesperson", "customer"],
-                "metadata_file": "data/Dealership_graph.json", 
-                "database_file": "data/Dealership.db"
+                "metadata_file": "data/Dealership_graph.json",
+                "database_file": "data/Dealership.db",
+                "exists": True
             }
             self["DermTreatment"] = {
                 "keywords": ["doctor", "patient", "drug", "treatment", "diagnosis"],
                 "metadata_file": "data/DermTreatment_graph.json",
-                "databaseFile": "data/DermTreatment.db",
+                "database_file": "data/DermTreatment.db",
                 "exists": True
             }
             self["Ewallet"] = {
                 "keywords": ["user", "transaction", "merchant", "wallet", "balance"],
                 "metadata_file": "data/Ewallet_graph.json",
-                "databaseFile": "data/Ewallet.db",
+                "database_file": "data/Ewallet.db",
                 "exists": True
             }
             self["TPCH"] = {
                 "keywords": ["supplier", "order", "lineitem", "customer", "nation"],
                 "metadata_file": "data/tpch_graph.json",
-                "databaseFile": "data/tpch.db",
+                "database_file": "data/tpch.db",
                 "exists": True
             }
     
