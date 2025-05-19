@@ -331,7 +331,7 @@ Current Domain: {domain_name}
 {query}
 
 # {domain_name} Schema Information
-{schema_content} # This will be empty if defog_{domain_name}.md is missing
+{schema_content} # This will be empty if data/{domain_name}.md is missing
 
 # PyDough Cheatsheet
 {cheatsheet_content}
