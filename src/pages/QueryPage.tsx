@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Play, Database, Save, Code, FileX, Download, CheckCircle, Key, Clipboard, RefreshCw, Settings } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import Editor from '@monaco-editor/react';
+import toast, { Toaster } from 'react-hot-toast';
 
 const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
   const [apiKey, setApiKey] = useState('');
@@ -283,6 +284,26 @@ const QueryPage: React.FC = () => {
     setProcessingError(null); // Clear local error display
     setError(null); // Clear global error
   };
+
+  const handleCopyCode = async () => {
+    if (!generatedCode) return;
+    try {
+      await navigator.clipboard.writeText(generatedCode);
+      toast.success('Code copied to clipboard');
+    } catch {
+      toast.error('Failed to copy');
+    }
+  };
+
+  const handleCopySQL = async () => {
+    if (!generatedSQL) return;
+    try {
+      await navigator.clipboard.writeText(generatedSQL);
+      toast.success('SQL copied to clipboard');
+    } catch {
+      toast.error('Failed to copy');
+    }
+  };
   
   if (needsApiKey) {
     return <ApiKeySetup onKeySet={() => setNeedsApiKey(false)} />;
@@ -290,6 +311,7 @@ const QueryPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <Toaster position="top-center" reverseOrder={false} />
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Natural Language Query</h1>
@@ -606,6 +628,7 @@ const QueryPage: React.FC = () => {
                     
                     <button
                       type="button"
+                      onClick={handleCopyCode}
                       className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                       disabled={!generatedCode}
                     >
@@ -639,14 +662,15 @@ const QueryPage: React.FC = () => {
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-medium text-gray-900">Generated SQL</h2>
                   
-                  <button
-                    type="button"
-                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                    disabled={!generatedSQL}
-                  >
-                    <Code className="h-3.5 w-3.5 mr-1" />
-                    Copy
-                  </button>
+                    <button
+                      type="button"
+                      onClick={handleCopySQL}
+                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      disabled={!generatedSQL}
+                    >
+                      <Code className="h-3.5 w-3.5 mr-1" />
+                      Copy
+                    </button>
                 </div>
                 
                 {generatedSQL ? (
