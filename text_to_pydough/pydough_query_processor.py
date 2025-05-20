@@ -478,6 +478,7 @@ print("\\nSQL Query:")
 print(pydough.to_sql(result))
 print("\\nResult:")
 print(pydough.to_df(result).head(10))  # Show only first 10 rows
+print("PD_JSON::" + pydough.to_df(result).to_json(orient="split"))
 """
 
     # Write to Python file in the results directory
@@ -508,7 +509,21 @@ def execute_pydough_script(script_path):
             print(f"✅ Execution successful")
             print("\nOutput:")
             print(stdout)
-            return {'success': True, 'output': stdout}
+
+            pandas_df_json = None
+            match = re.search(r"PD_JSON::(.*)", stdout)
+            if match:
+                json_str = match.group(1).strip()
+                try:
+                    pandas_df_json = json.loads(json_str)
+                except Exception as json_err:
+                    print(f"Warning: failed to parse PD_JSON output: {json_err}")
+
+            return {
+                'success': True,
+                'output': stdout,
+                'pandas_df_json': pandas_df_json
+            }
         else:
             print(f"❌ Execution failed with return code {process.returncode}")
             print("Error:")
@@ -952,6 +967,8 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
             if execute:
                 execution_result = execute_pydough_script(output_file_path)
                 result_data["execution"] = execution_result
+                if execution_result.get("pandas_df_json") is not None:
+                    result_data["pandas_df_json"] = execution_result["pandas_df_json"]
         else:
             print("\n❌ No PyDough code found in the response")
 
@@ -1002,9 +1019,10 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
             "domain": domain_name,
             "pydough_code": pydough_code,    # snake_case (backend standard)
             "pydoughCode": pydough_code,     # camelCase (frontend expects this)
-            "explanation": explanation,      # snake_case 
+            "explanation": explanation,      # snake_case
             "timestamp": datetime.now().isoformat(),
             "execution": execution_result,
+            "pandas_df_json": result_data.get("pandas_df_json") if result_data.get("pandas_df_json") is not None else None,
         }
 
 def process_all_queries(queries, max_queries=None, execute=False, save_results=True, use_code_review=False, domain=None):
