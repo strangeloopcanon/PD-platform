@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Play, Database, Save, Code, FileX, Download, CheckCircle, Key, Clipboard, RefreshCw, Settings } from 'lucide-react';
+import { ChevronRight, Play, Database, Save, Code, FileX, Download, CheckCircle, Key, Clipboard, RefreshCw, Settings, BarChart3 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import Editor from '@monaco-editor/react';
 import toast, { Toaster } from 'react-hot-toast';
@@ -173,6 +173,7 @@ const QueryPage: React.FC = () => {
     isLoading,
     error,
     setError,
+    selectedDataFrame,
     conversationHistory,
     clearConversationHistory,
     useLangGraph,
@@ -583,14 +584,25 @@ const QueryPage: React.FC = () => {
                     )}
                   </h2>
                   
-                  <button
-                    type="button"
-                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                    disabled={!queryResults}
-                  >
-                    <Download className="h-3.5 w-3.5 mr-1" />
-                    Export
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      disabled={!queryResults}
+                    >
+                      <Download className="h-3.5 w-3.5 mr-1" />
+                      Export
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/notebook')}
+                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      disabled={!selectedDataFrame}
+                    >
+                      <BarChart3 className="h-3.5 w-3.5 mr-1" />
+                      Notebook
+                    </button>
+                  </div>
                 </div>
                 
                 {queryResults ? (
