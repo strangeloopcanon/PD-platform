@@ -3,7 +3,6 @@ import { Play, Save, PlusCircle, CheckCircle, Code, FileText, Trash2, Download, 
 import { useAppContext } from '../context/AppContext';
 import Editor from '@monaco-editor/react';
 import toast, { Toaster } from 'react-hot-toast';
-import { loadPyodide, PyodideInterface } from 'pyodide';
 
 interface NotebookCell {
   id: string;
@@ -22,13 +21,14 @@ const NotebookPage: React.FC = () => {
   const [copilotQuery, setCopilotQuery] = useState<string>('');
   const [loadingCopilotSuggestion, setLoadingCopilotSuggestion] = useState(false);
   const [activeCellId, setActiveCellId] = useState<string | null>(null);
-  const [pyodide, setPyodide] = useState<PyodideInterface | null>(null);
+  const [pyodide, setPyodide] = useState<any>(null);
   const dfRef = useRef<any | null>(null);
 
   useEffect(() => {
     const init = async () => {
       try {
-        const py = await loadPyodide();
+        // @ts-ignore
+        const py = await (window as any).loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/" });
         await py.loadPackage(["pandas", "matplotlib", "seaborn"]);
         setPyodide(py);
       } catch (e) {

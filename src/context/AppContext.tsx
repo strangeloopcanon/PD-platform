@@ -501,56 +501,84 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             // 3. Extract results data similarly
             const dataMatch = executionOutput.match(/Result:([\s\S]*?)(?=$)/);
             if (dataMatch && dataMatch[1]) {
-              // Extract the raw tabular data
               const rawTableData = dataMatch[1].trim();
-              
-              // Basic check - if it looks like tabular data with rows and columns
-              if (rawTableData.includes('\n') && rawTableData.match(/\s{2,}/)) {
+              const pdJsonPrefix = 'PD_JSON::';
+              const pdJsonStartIndex = rawTableData.indexOf(pdJsonPrefix);
+
+              if (pdJsonStartIndex !== -1) {
+                // PD_JSON:: found, prioritize parsing this
                 try {
-                  // Format as simple HTML table
-                  const lines = rawTableData.split('\n').filter((line: string) => line.trim());
-                  
-                  if (lines.length >= 2) {
-                    // Create a basic HTML table
+                  const jsonDataString = rawTableData.substring(pdJsonStartIndex + pdJsonPrefix.length);
+                  const parsedJson = JSON.parse(jsonDataString);
+
+                  if (parsedJson.columns && parsedJson.data && Array.isArray(parsedJson.data)) {
                     let tableHtml = '<table class="results-table">';
-                    
-                    // Add header row
-                    const headerLine = lines[0];
                     tableHtml += '<thead><tr class="results-header">';
-                    headerLine.split(/\s{2,}/).forEach((header: string) => {
-                      tableHtml += `<th class="results-header-cell">${header.trim()}</th>`;
+                    parsedJson.columns.forEach((header: string) => {
+                      tableHtml += `<th class="results-header-cell">${String(header).trim()}</th>`;
                     });
                     tableHtml += '</tr></thead>';
-                    
-                    // Add data rows
                     tableHtml += '<tbody>';
-                    lines.slice(1).forEach((line: string) => {
+                    parsedJson.data.forEach((row: any[]) => {
                       tableHtml += '<tr class="results-row">';
-                      line.split(/\s{2,}/).forEach((cell: string) => {
-                        tableHtml += `<td class="results-cell">${cell.trim()}</td>`;
-                      });
+                      if (Array.isArray(row)) {
+                        const MAPPED_ROW_LENGTH = parsedJson.columns.length;
+                        for (let i = 0; i < MAPPED_ROW_LENGTH; i++) {
+                          const cellValue = row[i];
+                          tableHtml += `<td class="results-cell">${String(cellValue === null || cellValue === undefined ? '' : cellValue).trim()}</td>`;
+                        }
+                      } else {
+                        tableHtml += `<td class="results-cell" colspan="${parsedJson.columns.length}">${String(row === null || row === undefined ? '' : row).trim()}</td>`;
+                      }
                       tableHtml += '</tr>';
                     });
-                    
                     tableHtml += '</tbody></table>';
-                    
-                    // Set directly as HTML
-                    dataResult = tableHtml;
+                    dataResult = tableHtml; // Successfully converted PD_JSON to HTML table
                   } else {
-                    // Not enough lines for a table, use as-is
-                    dataResult = rawTableData;
+                    console.warn('PD_JSON:: string found, but internal structure (columns/data) is not as expected. Displaying raw PD_JSON string segment.', parsedJson);
+                    dataResult = rawTableData.substring(pdJsonStartIndex); // Show the PD_JSON part as raw
                   }
                 } catch (e) {
-                  console.warn("Failed to format table data:", e);
-                  dataResult = rawTableData; // Fall back to raw text
+                  console.warn("Failed to parse PD_JSON:: data from execution output. Displaying raw PD_JSON string segment.", e);
+                  dataResult = rawTableData.substring(pdJsonStartIndex); // Show the PD_JSON part as raw on error
                 }
               } else {
-                // Not a table structure, use as-is
-                dataResult = rawTableData;
+                // PD_JSON:: not found in rawTableData, proceed with plain text table parsing
+                if (rawTableData.includes('\n') && rawTableData.match(/\s{2,}/)) {
+                  try {
+                    const lines = rawTableData.split('\n').filter((line: string) => line.trim());
+                    if (lines.length >= 2) {
+                      let tableHtml = '<table class="results-table">';
+                      const headerLine = lines[0];
+                      tableHtml += '<thead><tr class="results-header">';
+                      headerLine.split(/\s{2,}/).forEach((header: string) => {
+                        tableHtml += `<th class="results-header-cell">${header.trim()}</th>`;
+                      });
+                      tableHtml += '</tr></thead>';
+                      tableHtml += '<tbody>';
+                      lines.slice(1).forEach((line: string) => {
+                        tableHtml += '<tr class="results-row">';
+                        line.split(/\s{2,}/).forEach((cell: string) => {
+                          tableHtml += `<td class="results-cell">${cell.trim()}</td>`;
+                        });
+                        tableHtml += '</tr>';
+                      });
+                      tableHtml += '</tbody></table>';
+                      dataResult = tableHtml;
+                    } else {
+                      dataResult = rawTableData;
+                    }
+                  } catch (e) {
+                    console.warn("Failed to format plain text table data:", e);
+                    dataResult = rawTableData;
+                  }
+                } else {
+                  dataResult = rawTableData;
+                }
               }
             }
             
-            // 4. Direct result data if available
+            // 4. Direct result data if available (this might be redundant if PD_JSON was prioritized or plain text table was parsed)
             if (!dataResult && data.execution.results) {
               dataResult = JSON.stringify(data.execution.results, null, 2);
             }
