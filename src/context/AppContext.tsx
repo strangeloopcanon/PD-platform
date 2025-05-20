@@ -400,36 +400,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (data.success) {
           setGeneratedCode(data.pydough_code || null);
           
-          // Handle execution results
           let sqlResult = null;
           let dataResult = null;
           
           if (data.execution) {
-            // Extract SQL from execution result
             if (data.execution.sql) {
               sqlResult = data.execution.sql;
             }
             
-            // Extract data results
             if (data.execution.result_data) {
               const rd = data.execution.result_data;
               if (rd.pandas_df) {
-                // Format pandas dataframe as HTML table
                 dataResult = `<div class="results-html">${rd.pandas_df}</div>`;
               } else if (rd.result_str) {
                 dataResult = rd.result_str;
               }
 
-              // Parse dataframe JSON for notebook usage
               if (rd.pandas_df_json) {
+                console.log("[LG] Found pandas_df_json:", rd.pandas_df_json); // DEBUG
                 try {
                   const dfObj = JSON.parse(rd.pandas_df_json);
+                  console.log("[LG] Parsed dfObj:", dfObj); // DEBUG
                   setSelectedDataFrame(dfObj);
                 } catch (e) {
-                  console.warn('Failed to parse pandas_df_json:', e);
+                  console.warn('[LG] Failed to parse pandas_df_json:', e);
+                  setSelectedDataFrame(null);
                 }
+              } else {
+                console.log("[LG] pandas_df_json not found in result_data."); // DEBUG
+                setSelectedDataFrame(null);
               }
+            } else {
+              console.log("[LG] data.execution.result_data not found."); // DEBUG
+              setSelectedDataFrame(null);
             }
+          } else {
+            console.log("[LG] data.execution not found."); // DEBUG
+            setSelectedDataFrame(null);
           }
           
           setGeneratedSQL(sqlResult);
@@ -444,7 +451,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 role: 'assistant',
                 content: assistantMessages.map((msg: any) => msg.content).join('\n\n')
               };
-              setConversationHistory([...currentHistory, assistantTurn]);
+              setConversationHistory(prev => [...prev, assistantTurn]);
             }
           }
           
@@ -474,14 +481,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           let executionError: string | null = null; // Variable for specific execution error
 
           if (data.execution) { // Check if execution results exist
-            // Pass dataframe JSON to notebook if available
-            if (data.execution.result_data && data.execution.result_data.pandas_df_json) {
+            const resultData = data.execution.result_data;
+            const dfJsonValue = resultData?.pandas_df_json; // Safely access pandas_df_json
+
+            console.log('[Non-LG] Checking dfJsonValue. Type:', typeof dfJsonValue, 'Value:', dfJsonValue); // DETAILED LOG
+
+            if (typeof dfJsonValue === 'string' && dfJsonValue.trim() !== '') {
+              console.log("[Non-LG] Attempting to parse non-empty string pandas_df_json:", dfJsonValue);
               try {
-                const dfObj = JSON.parse(data.execution.result_data.pandas_df_json);
+                const dfObj = JSON.parse(dfJsonValue);
+                console.log("[Non-LG] Successfully parsed pandas_df_json. Parsed dfObj:", dfObj);
                 setSelectedDataFrame(dfObj);
               } catch (e) {
-                console.warn('Failed to parse pandas_df_json:', e);
+                console.warn('[Non-LG] Failed to parse pandas_df_json. Error:', e, "Raw string type was:", typeof dfJsonValue, "Raw string value was:", dfJsonValue);
+                setSelectedDataFrame(null);
               }
+            } else {
+              if (resultData && Object.prototype.hasOwnProperty.call(resultData, 'pandas_df_json')) {
+                 console.log("[Non-LG] pandas_df_json was present but was not a non-empty string. Type:", typeof dfJsonValue, "Value:", dfJsonValue);
+              } else if (resultData) {
+                 console.log("[Non-LG] pandas_df_json key was not found in data.execution.result_data.");
+              } else {
+                 console.log("[Non-LG] data.execution.result_data itself was not found.");
+              }
+              setSelectedDataFrame(null);
             }
 
             // More robust SQL extraction - look for it in different places
@@ -508,7 +531,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (pdJsonStartIndex !== -1) {
                 // PD_JSON:: found, prioritize parsing this
                 try {
-                  const jsonDataString = rawTableData.substring(pdJsonStartIndex + pdJsonPrefix.length);
+                  let jsonDataString = rawTableData.substring(pdJsonStartIndex + pdJsonPrefix.length);
+                  const endMarker = 'PD_JSON_END';
+                  const endMarkerIndex = jsonDataString.indexOf(endMarker);
+                  if (endMarkerIndex !== -1) {
+                      jsonDataString = jsonDataString.substring(0, endMarkerIndex);
+                  }
+                  jsonDataString = jsonDataString.trim(); // Trim any trailing newlines/whitespace
+
                   const parsedJson = JSON.parse(jsonDataString);
 
                   if (parsedJson.columns && parsedJson.data && Array.isArray(parsedJson.data)) {
@@ -587,6 +617,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (!data.execution.success) {
               executionError = data.execution.error || "Execution failed without a specific error message";
             }
+          } else { // No data.execution block
+            console.log("[Non-LG] data.execution not found."); // DEBUG
+            setSelectedDataFrame(null);
           }
           
           // Fallback explanation if no execution result or explanation provided
