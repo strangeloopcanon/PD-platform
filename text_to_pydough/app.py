@@ -755,6 +755,7 @@ def process_query_langgraph():
             "domain": final_state.get("domain", "Unknown"),
             "pydough_code": pydough_code,
             "execution": execution_result if execution_result else None,
+            "pandas_df_json": execution_result.get("pandas_df_json") if execution_result else None,
             "messages": messages,
             "timestamp": datetime.now().isoformat()
         }
