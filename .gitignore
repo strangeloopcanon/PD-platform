@@ -164,3 +164,6 @@ text_to_pydough/data/tpch.db
 bfg.jar
 text_to_pydough/venv
 text_to_pydough/results
+
+# Node dependencies
+node_modules/
