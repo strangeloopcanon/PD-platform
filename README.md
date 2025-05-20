@@ -21,7 +21,7 @@ A web interface for interacting with the PyDough query processor. This platform 
     -   Auto-execution toggle for PyDough and SQL.
     -   Clear conversation history.
     -   Select different data domains.
--   **Query History:** Saves and manages your past queries and their results within a session.
+-   **Query History:** Recent queries are shown on the Dashboard for quick reference.
 -   **(Backend) Structured LLM Output:** Ensures more reliable code generation.
 -   **(Backend) LLM-based Domain Detection:** Automatically identifies the relevant data domain for your query.
 -   **(New) Robust Response Parsing:** Enhanced extraction techniques ensure PyDough code is reliably captured from various LLM response formats.
