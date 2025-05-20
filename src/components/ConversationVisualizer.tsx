@@ -60,10 +60,10 @@ const ConversationVisualizer: React.FC = () => {
         {queryHistory.map((message) => {
           const isExpanded = expandedMessages.has(message.id);
           const activeTab = activeTabs[message.id] || 'sql';
-          
+
           return (
-            <div 
-              key={message.id} 
+            <div
+              key={message.id}
               className={`p-4 ${message.role === 'user' ? 'bg-gray-50' : 'bg-white'}`}
             >
               <div className="flex items-start">
@@ -92,13 +92,13 @@ const ConversationVisualizer: React.FC = () => {
                       </ReactMarkdown>
                     </div>
                   </div>
-                  
+
                   {message.role === 'assistant' && message.code && (
                     <div className="mt-2">
                       <div className="flex border-b border-gray-200">
                         <button
                           className={`px-3 py-2 text-xs font-medium ${
-                            activeTab === 'sql' 
+                            activeTab === 'sql'
                               ? 'text-primary-700 border-b-2 border-primary-500'
                               : 'text-gray-500 hover:text-gray-700'
                           }`}
@@ -108,7 +108,7 @@ const ConversationVisualizer: React.FC = () => {
                         </button>
                         <button
                           className={`px-3 py-2 text-xs font-medium ${
-                            activeTab === 'pydough' 
+                            activeTab === 'pydough'
                               ? 'text-primary-700 border-b-2 border-primary-500'
                               : 'text-gray-500 hover:text-gray-700'
                           }`}
@@ -117,7 +117,7 @@ const ConversationVisualizer: React.FC = () => {
                           PyDough
                         </button>
                       </div>
-                      
+
                       <div className="relative bg-gray-800 text-white rounded-b-md overflow-hidden">
                         <button
                           className="absolute top-2 right-2 p-1 rounded-md hover:bg-gray-700"
@@ -133,7 +133,7 @@ const ConversationVisualizer: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {message.role === 'assistant' && message.explanation && (
                     <div className="mt-2 relative">
                       <button
@@ -152,7 +152,7 @@ const ConversationVisualizer: React.FC = () => {
                           </>
                         )}
                       </button>
-                      
+
                       {isExpanded && (
                         <div className="mt-2 p-3 bg-amber-50 rounded-md text-xs text-gray-800">
                           <h4 className="font-medium flex items-center mb-1">
@@ -169,7 +169,7 @@ const ConversationVisualizer: React.FC = () => {
                       )}
                     </div>
                   )}
-                  
+
                   <div className="mt-1 text-xs text-gray-500">
                     {new Date(message.timestamp).toLocaleTimeString()}
                   </div>
@@ -183,4 +183,4 @@ const ConversationVisualizer: React.FC = () => {
   );
 };
 
-export default ConversationVisualizer; 
+export default ConversationVisualizer;

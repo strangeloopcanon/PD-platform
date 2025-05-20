@@ -69,13 +69,13 @@ const SchemaRecommendations: React.FC = () => {
   };
 
   const applyRecommendation = (id: string) => {
-    setRecommendations(recommendations.map(rec => 
+    setRecommendations(recommendations.map(rec =>
       rec.id === id ? { ...rec, applied: true, dismissed: false } : rec
     ));
   };
 
   const dismissRecommendation = (id: string) => {
-    setRecommendations(recommendations.map(rec => 
+    setRecommendations(recommendations.map(rec =>
       rec.id === id ? { ...rec, dismissed: true, applied: false } : rec
     ));
   };
@@ -130,7 +130,7 @@ const SchemaRecommendations: React.FC = () => {
                         {rec.type}
                       </span>
                     </div>
-                    <button 
+                    <button
                       className="mt-1 flex items-center text-sm text-primary-600"
                       onClick={() => toggleExpand(rec.id)}
                     >
@@ -205,4 +205,4 @@ const SchemaRecommendations: React.FC = () => {
   );
 };
 
-export default SchemaRecommendations; 
+export default SchemaRecommendations;

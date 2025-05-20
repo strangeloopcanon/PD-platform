@@ -244,7 +244,7 @@ metrics:
                 <p className="pl-1">or drag and drop</p>
               </div>
               <p className="text-xs text-gray-500">
-                {importSource === 'dbt' ? 'manifest.json, metrics.yml' : 
+                {importSource === 'dbt' ? 'manifest.json, metrics.yml' :
                  importSource === 'yaml' ? 'YAML up to 10MB' : 'JSON up to 10MB'}
               </p>
             </div>
@@ -337,7 +337,7 @@ metrics:
                 </div>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="px-4 py-5 sm:p-6">
@@ -354,7 +354,7 @@ metrics:
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="px-4 py-5 sm:p-6">
                   <div className="flex items-center">
@@ -370,7 +370,7 @@ metrics:
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="px-4 py-5 sm:p-6">
                   <div className="flex items-center">
@@ -386,7 +386,7 @@ metrics:
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-white overflow-hidden shadow rounded-lg">
                 <div className="px-4 py-5 sm:p-6">
                   <div className="flex items-center">
@@ -403,7 +403,7 @@ metrics:
                 </div>
               </div>
             </div>
-            
+
             {mappedEntities.unmapped > 0 && (
               <div className="bg-amber-50 border-l-4 border-amber-400 p-4">
                 <div className="flex">
@@ -540,9 +540,9 @@ metrics:
             { id: 'complete', name: 'Complete' },
           ].map((tab, i) => {
             const isCurrent = currentStep === tab.id;
-            const isPrevious = ['upload', 'mapping', 'review', 'complete'].indexOf(currentStep) > 
+            const isPrevious = ['upload', 'mapping', 'review', 'complete'].indexOf(currentStep) >
                               ['upload', 'mapping', 'review', 'complete'].indexOf(tab.id);
-            
+
             return (
               <button
                 key={tab.id}
@@ -556,8 +556,8 @@ metrics:
                 } w-1/4 py-4 px-1 text-center border-b-2 font-medium text-sm flex flex-col items-center justify-center`}
               >
                 <div className={`flex items-center justify-center h-6 w-6 rounded-full text-xs ${
-                  isCurrent 
-                    ? 'bg-primary-100 text-primary-700' 
+                  isCurrent
+                    ? 'bg-primary-100 text-primary-700'
                     : isPrevious
                     ? 'bg-green-100 text-green-700'
                     : 'bg-gray-100 text-gray-400'
@@ -589,4 +589,4 @@ metrics:
   );
 };
 
-export default ImportSemanticLayer; 
+export default ImportSemanticLayer;

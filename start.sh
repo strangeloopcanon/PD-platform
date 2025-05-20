@@ -32,7 +32,7 @@ echo -e "${GREEN}Starting PyDough Platform...${NC}"
 if [ ! -f "text_to_pydough/.env" ]; then
     echo -e "${YELLOW}No .env file found in text_to_pydough directory${NC}"
     echo -e "Creating template .env file at text_to_pydough/.env.example"
-    
+
     cat > text_to_pydough/.env.example << EOL
 # API Keys
 # Replace with your actual API key from Google AI Studio (https://ai.google.dev/)
@@ -42,7 +42,7 @@ GEMINI_API_KEY=your_gemini_api_key_here
 # PORT=5001  # Change the port number if needed
 # DEBUG=True  # Enable/disable debug mode
 EOL
-    
+
     echo -e "${YELLOW}To use your Gemini API key, copy .env.example to .env and add your key:${NC}"
     echo -e "cp text_to_pydough/.env.example text_to_pydough/.env"
     echo -e "Then edit text_to_pydough/.env with your API key"
@@ -104,4 +104,4 @@ echo -e "Frontend: http://localhost:5173"
 echo -e "${YELLOW}Press Ctrl+C to stop both servers${NC}"
 
 # Wait for both processes
-wait 
+wait

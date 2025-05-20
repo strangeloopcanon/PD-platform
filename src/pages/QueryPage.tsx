@@ -10,12 +10,12 @@ const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
-    
+
     try {
       const response = await fetch('http://localhost:5001/api/api-key', {
         method: 'POST',
@@ -24,9 +24,9 @@ const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
         },
         body: JSON.stringify({ api_key: apiKey })
       });
-      
+
       const data = await response.json();
-      
+
       if (data.success) {
         setSuccess(true);
         setTimeout(() => {
@@ -41,19 +41,19 @@ const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
       setIsSubmitting(false);
     }
   };
-  
+
   return (
     <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-6 mb-6">
       <h2 className="text-lg font-medium text-yellow-800 flex items-center">
         <Key className="h-5 w-5 mr-2" />
         Gemini API Key Required
       </h2>
-      
+
       <p className="mt-2 text-sm text-yellow-700">
         The application needs a Gemini API key to process natural language queries.
         You can get a key from <a href="https://ai.google.dev/" target="_blank" rel="noopener noreferrer" className="underline">Google AI Studio</a>.
       </p>
-      
+
       <form onSubmit={handleSubmit} className="mt-4">
         <div className="flex flex-col sm:flex-row gap-2">
           <input
@@ -64,7 +64,7 @@ const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
             className="flex-1 px-3 py-2 border border-yellow-300 rounded-md shadow-sm focus:ring-yellow-500 focus:border-yellow-500"
             required
           />
-          
+
           <button
             type="submit"
             disabled={isSubmitting || !apiKey.trim() || success}
@@ -73,11 +73,11 @@ const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
             {isSubmitting ? 'Setting Key...' : success ? 'Key Set!' : 'Set API Key'}
           </button>
         </div>
-        
+
         {error && (
           <p className="mt-2 text-sm text-red-600">{error}</p>
         )}
-        
+
         {success && (
           <p className="mt-2 text-sm text-green-600 flex items-center">
             <CheckCircle className="h-4 w-4 mr-1" />
@@ -85,10 +85,10 @@ const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
           </p>
         )}
       </form>
-      
+
       <div className="mt-4 text-xs text-yellow-600 bg-yellow-100 p-3 rounded">
         <p className="font-medium">Alternative Setup Methods:</p>
-        
+
         <div className="mt-2">
           <p className="font-medium">Option 1: Using a .env file (recommended)</p>
           <code className="block mt-1 font-mono">
@@ -97,7 +97,7 @@ const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
           </code>
           <p className="mt-1 text-xs">Then restart the application with ./start.sh</p>
         </div>
-        
+
         <div className="mt-2">
           <p className="font-medium">Option 2: Using the terminal</p>
           <code className="block mt-1 font-mono">
@@ -156,9 +156,9 @@ const QueryResultsDisplay = ({ results }: { results: string | null }) => {
 
 const QueryPage: React.FC = () => {
   const navigate = useNavigate();
-  const { 
-    connectionStatus, 
-    currentQuery, 
+  const {
+    connectionStatus,
+    currentQuery,
     setCurrentQuery,
     processQuery,
     queryResults,
@@ -176,42 +176,42 @@ const QueryPage: React.FC = () => {
     setUseLangGraph,
     langGraphAvailable
   } = useAppContext();
-  
+
   const [processingError, setProcessingError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'results' | 'code' | 'sql'>('results');
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
   const [needsApiKey, setNeedsApiKey] = useState(false);
   const [autoExecute, setAutoExecute] = useState<boolean>(true);
   const [showSettings, setShowSettings] = useState<boolean>(false);
-  
+
   // Redirect if not connected
   useEffect(() => {
     if (!connectionStatus) {
       navigate('/connect');
     }
   }, [connectionStatus, navigate]);
-  
+
   // Set selectedDomain when detectedDomain changes
   useEffect(() => {
     if (detectedDomain) {
       setSelectedDomain(detectedDomain);
     }
   }, [detectedDomain]);
-  
+
   // Update processingError when global error changes
   useEffect(() => {
     if (error) {
       setProcessingError(error);
     }
   }, [error]);
-  
+
   // Check if API key is configured
   useEffect(() => {
     const checkApiStatus = async () => {
       try {
         const response = await fetch('http://localhost:5001/api/status');
         const data = await response.json();
-        
+
         if (data.success && !data.llm_api_configured) {
           setNeedsApiKey(true);
           if (data.llm_error) {
@@ -222,20 +222,20 @@ const QueryPage: React.FC = () => {
         console.error('Failed to check API status:', error);
       }
     };
-    
+
     checkApiStatus();
   }, []);
-  
+
   // Handle query submission
   const handleSubmitQuery = async () => {
     if (!currentQuery.trim()) return;
-    
+
     setProcessingError(null);
     setError(null);
-    
+
     try {
       const queryGenResult = await processQuery(currentQuery, autoExecute, selectedDomain);
-      
+
       if (queryGenResult?.error && !queryGenResult?.success) {
         console.error("Error reported by processQuery:", queryGenResult.error);
         setProcessingError(`Error processing query: ${queryGenResult.error}`);
@@ -249,11 +249,11 @@ const QueryPage: React.FC = () => {
       setError(`Query processing error: ${err.message || err}`);
     }
   };
-  
+
   // Handle saving to favorites
   const handleSaveFavorite = () => {
     if (!currentQuery.trim()) return;
-    
+
     addHistoryItem({
       query: currentQuery,
       result: queryResults,
@@ -263,20 +263,20 @@ const QueryPage: React.FC = () => {
       pydoughCode: generatedCode || undefined,
       sql: generatedSQL || undefined
     });
-    
+
     // Show a temporary success message
     const actionMessage = document.getElementById('action-message');
     if (actionMessage) {
       actionMessage.classList.remove('opacity-0');
       actionMessage.classList.add('opacity-100');
-      
+
       setTimeout(() => {
         actionMessage.classList.remove('opacity-100');
         actionMessage.classList.add('opacity-0');
       }, 2000);
     }
   };
-  
+
   // Handle starting a new conversation
   const handleNewConversation = () => {
     clearConversationHistory();
@@ -304,7 +304,7 @@ const QueryPage: React.FC = () => {
       toast.error('Failed to copy');
     }
   };
-  
+
   if (needsApiKey) {
     return <ApiKeySetup onKeySet={() => setNeedsApiKey(false)} />;
   }
@@ -319,9 +319,9 @@ const QueryPage: React.FC = () => {
             Ask questions about your data in plain English
           </p>
         </div>
-        
+
         {/* Settings Button */}
-        <button 
+        <button
           onClick={() => setShowSettings(!showSettings)}
           className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
@@ -329,7 +329,7 @@ const QueryPage: React.FC = () => {
           Settings
         </button>
       </div>
-      
+
       {/* Settings Panel */}
       {showSettings && (
         <div className="mt-4 bg-gray-50 p-4 rounded-md border border-gray-200">
@@ -358,7 +358,7 @@ const QueryPage: React.FC = () => {
                 ></span>
               </button>
             </div>
-            
+
             {/* LangGraph Toggle - Only show if available */}
             {langGraphAvailable && (
               <div className="flex items-center justify-between">
@@ -384,7 +384,7 @@ const QueryPage: React.FC = () => {
                 </button>
               </div>
             )}
-            
+
             {/* Domain Selection */}
             <div>
               <label htmlFor="domain-select" className="block text-sm font-medium text-gray-700">Domain selection</label>
@@ -401,7 +401,7 @@ const QueryPage: React.FC = () => {
               </select>
               <p className="mt-1 text-xs text-gray-500">Select a specific domain or let the system auto-detect</p>
             </div>
-            
+
             {/* Clear Conversation */}
             <div>
               <button
@@ -416,7 +416,7 @@ const QueryPage: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {/* Update the error message if it still shows up */}
       {processingError && (processingError.includes("gemini-2.5-pro-preview-05-06") || processingError.includes("gemini-2.0-flash")) && (
         <div className="mt-4 bg-yellow-50 border-l-4 border-yellow-400 p-4">
@@ -436,7 +436,7 @@ const QueryPage: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       <div className="mt-6">
         <div className="flex flex-col md:flex-row md:items-center md:space-x-4">
           <div className="relative flex-1">
@@ -453,16 +453,16 @@ const QueryPage: React.FC = () => {
                 onKeyPress={(e) => e.key === 'Enter' && handleSubmitQuery()}
               />
             </div>
-            
+
             <div id="action-message" className="absolute mt-2 text-sm text-green-600 opacity-0 transition-opacity duration-300 flex items-center">
               <CheckCircle className="h-4 w-4 mr-1" />
               Query saved to favorites
             </div>
           </div>
-          
+
           <div className="mt-2 md:mt-0 flex-shrink-0">
             <div className="flex items-center space-x-2">
-              
+
               <button
                 type="submit"
                 onClick={handleSubmitQuery}
@@ -481,7 +481,7 @@ const QueryPage: React.FC = () => {
                   </>
                 )}
               </button>
-              
+
               <button
                 type="button"
                 onClick={handleSaveFavorite}
@@ -494,7 +494,7 @@ const QueryPage: React.FC = () => {
             </div>
           </div>
         </div>
-        
+
         {/* Add note about automatic domain detection */}
         <div className="mt-2 text-xs text-gray-500 italic">
           The system will automatically detect the most appropriate database domain for your query.
@@ -505,7 +505,7 @@ const QueryPage: React.FC = () => {
           )}
         </div>
       </div>
-      
+
       {/* Loading Indicator for Query Processing */}
       {isLoading && (
         <div className="mt-6 text-center py-4">
@@ -513,7 +513,7 @@ const QueryPage: React.FC = () => {
           <p className="mt-2 text-sm text-gray-600">Processing your query, please wait...</p>
         </div>
       )}
-      
+
       {processingError && (
         <div className="mt-4 bg-red-50 border-l-4 border-red-400 p-4">
           <div className="flex">
@@ -528,7 +528,7 @@ const QueryPage: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {(queryResults || generatedCode || generatedSQL) && (
         <div className="mt-6">
           <div className="border-b border-gray-200">
@@ -565,7 +565,7 @@ const QueryPage: React.FC = () => {
               </button>
             </nav>
           </div>
-          
+
           <div className="mt-4">
             {activeTab === 'results' && (
               <div>
@@ -579,7 +579,7 @@ const QueryPage: React.FC = () => {
                       </span>
                     )}
                   </h2>
-                  
+
                   <button
                     type="button"
                     className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
@@ -589,7 +589,7 @@ const QueryPage: React.FC = () => {
                     Export
                   </button>
                 </div>
-                
+
                 {queryResults ? (
                   <QueryResultsDisplay results={queryResults} />
                 ) : (
@@ -597,12 +597,12 @@ const QueryPage: React.FC = () => {
                 )}
               </div>
             )}
-            
+
             {activeTab === 'code' && (
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-medium text-gray-900">PyDough Code</h2>
-                  
+
                   <div className="flex items-center space-x-2">
                     <button
                       type="button"
@@ -625,7 +625,7 @@ const QueryPage: React.FC = () => {
                         </>
                       )}
                     </button>
-                    
+
                     <button
                       type="button"
                       onClick={handleCopyCode}
@@ -637,7 +637,7 @@ const QueryPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
-                
+
                 {generatedCode ? (
                   <div className="border border-gray-300 rounded-md overflow-hidden">
                     <Editor
@@ -656,12 +656,12 @@ const QueryPage: React.FC = () => {
                 )}
               </div>
             )}
-            
+
             {activeTab === 'sql' && (
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-medium text-gray-900">Generated SQL</h2>
-                  
+
                     <button
                       type="button"
                       onClick={handleCopySQL}
@@ -672,7 +672,7 @@ const QueryPage: React.FC = () => {
                       Copy
                     </button>
                 </div>
-                
+
                 {generatedSQL ? (
                   <div className="border border-gray-300 rounded-md overflow-hidden">
                     <Editor
@@ -694,15 +694,15 @@ const QueryPage: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       <div className="mt-8 bg-white shadow sm:rounded-md p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Sample Queries</h2>
-        
+
         <div className="bg-gray-50 p-4 rounded-md">
           <p className="text-sm text-gray-600 mb-4">
             Try these sample queries to get started:
           </p>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {detectedDomain && (
               <div>
@@ -711,7 +711,7 @@ const QueryPage: React.FC = () => {
                   {detectedDomain === 'Broker' && (
                     <>
                       <li>
-                        <button 
+                        <button
                           onClick={() => setCurrentQuery("List all customers and their email addresses")}
                           className="text-left text-sm text-primary-600 hover:text-primary-500"
                         >
@@ -719,7 +719,7 @@ const QueryPage: React.FC = () => {
                         </button>
                       </li>
                       <li>
-                        <button 
+                        <button
                           onClick={() => setCurrentQuery("Show me the top 5 stocks by trading volume")}
                           className="text-left text-sm text-primary-600 hover:text-primary-500"
                         >
@@ -728,11 +728,11 @@ const QueryPage: React.FC = () => {
                       </li>
                     </>
                   )}
-                  
+
                   {detectedDomain === 'Dealership' && (
                     <>
                       <li>
-                        <button 
+                        <button
                           onClick={() => setCurrentQuery("List all car models with their prices")}
                           className="text-left text-sm text-primary-600 hover:text-primary-500"
                         >
@@ -740,7 +740,7 @@ const QueryPage: React.FC = () => {
                         </button>
                       </li>
                       <li>
-                        <button 
+                        <button
                           onClick={() => setCurrentQuery("Show top 5 salespeople by revenue")}
                           className="text-left text-sm text-primary-600 hover:text-primary-500"
                         >
@@ -749,11 +749,11 @@ const QueryPage: React.FC = () => {
                       </li>
                     </>
                   )}
-                  
+
                   {detectedDomain === 'DermTreatment' && (
                     <>
                       <li>
-                        <button 
+                        <button
                           onClick={() => setCurrentQuery("List all doctors and their specialties")}
                           className="text-left text-sm text-primary-600 hover:text-primary-500"
                         >
@@ -761,7 +761,7 @@ const QueryPage: React.FC = () => {
                         </button>
                       </li>
                       <li>
-                        <button 
+                        <button
                           onClick={() => setCurrentQuery("Show most common patient diagnoses")}
                           className="text-left text-sm text-primary-600 hover:text-primary-500"
                         >
@@ -770,11 +770,11 @@ const QueryPage: React.FC = () => {
                       </li>
                     </>
                   )}
-                  
+
                   {detectedDomain === 'Ewallet' && (
                     <>
                       <li>
-                        <button 
+                        <button
                           onClick={() => setCurrentQuery("Show me all transactions over $1000")}
                           className="text-left text-sm text-primary-600 hover:text-primary-500"
                         >
@@ -782,7 +782,7 @@ const QueryPage: React.FC = () => {
                         </button>
                       </li>
                       <li>
-                        <button 
+                        <button
                           onClick={() => setCurrentQuery("List users with highest wallet balance")}
                           className="text-left text-sm text-primary-600 hover:text-primary-500"
                         >
@@ -791,11 +791,11 @@ const QueryPage: React.FC = () => {
                       </li>
                     </>
                   )}
-                  
+
                   {detectedDomain === 'TPCH' && (
                     <>
                       <li>
-                        <button 
+                        <button
                           onClick={() => setCurrentQuery("List all suppliers and their regions")}
                           className="text-left text-sm text-primary-600 hover:text-primary-500"
                         >
@@ -803,7 +803,7 @@ const QueryPage: React.FC = () => {
                         </button>
                       </li>
                       <li>
-                        <button 
+                        <button
                           onClick={() => setCurrentQuery("Show orders with highest line item count")}
                           className="text-left text-sm text-primary-600 hover:text-primary-500"
                         >
@@ -815,12 +815,12 @@ const QueryPage: React.FC = () => {
                 </ul>
               </div>
             )}
-            
+
             <div>
               <h3 className="text-sm font-medium text-gray-900 mb-2">General Queries:</h3>
               <ul className="space-y-2">
                 <li>
-                  <button 
+                  <button
                     onClick={() => setCurrentQuery("Show me the total count of records in each table")}
                     className="text-left text-sm text-primary-600 hover:text-primary-500"
                   >
@@ -828,7 +828,7 @@ const QueryPage: React.FC = () => {
                   </button>
                 </li>
                 <li>
-                  <button 
+                  <button
                     onClick={() => setCurrentQuery("What is the most recent transaction in the database?")}
                     className="text-left text-sm text-primary-600 hover:text-primary-500"
                   >
@@ -836,7 +836,7 @@ const QueryPage: React.FC = () => {
                   </button>
                 </li>
                 <li>
-                  <button 
+                  <button
                     onClick={() => setCurrentQuery("Create a summary report of key metrics")}
                     className="text-left text-sm text-primary-600 hover:text-primary-500"
                   >
@@ -848,7 +848,7 @@ const QueryPage: React.FC = () => {
           </div>
         </div>
       </div>
-      
+
       {/* Optional: Display Conversation History for Debugging */}
       {conversationHistory.length > 0 && (
         <div className="mt-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
@@ -867,4 +867,4 @@ const QueryPage: React.FC = () => {
   );
 };
 
-export default QueryPage; 
+export default QueryPage;

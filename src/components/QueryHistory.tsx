@@ -117,17 +117,17 @@ const QueryHistory: React.FC = () => {
                   <div className="mt-1 flex items-center text-xs text-gray-500">
                     <Calendar className="flex-shrink-0 mr-1.5 h-3 w-3" />
                     <span>{formatDate(item.timestamp)}</span>
-                    
+
                     {item.tags.length > 0 && (
                       <div className="ml-2 flex flex-wrap gap-1">
                         {item.tags.map(tag => (
-                          <span 
-                            key={tag} 
+                          <span
+                            key={tag}
                             className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-xs font-medium text-gray-800"
                           >
                             <Tag className="mr-1 h-2 w-2" />
                             {tag}
-                            <button 
+                            <button
                               className="ml-1 text-gray-400 hover:text-gray-600"
                               onClick={() => removeTagFromHistory(item.id, tag)}
                             >
@@ -197,4 +197,4 @@ const QueryHistory: React.FC = () => {
   );
 };
 
-export default QueryHistory; 
+export default QueryHistory;
