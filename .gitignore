@@ -167,3 +167,7 @@ text_to_pydough/results
 
 # Node dependencies
 node_modules/
+text_to_pydough/data/DepMap.db
+text_to_pydough/data/ProteinNetwork.db
+text_to_pydough/data/depmap.json
+text_to_pydough/data/proteinnetwork.json
