@@ -29,10 +29,18 @@ const NotebookPage: React.FC = () => {
       try {
         // @ts-ignore
         const py = await (window as any).loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/" });
-        await py.loadPackage(["pandas", "matplotlib", "seaborn"]);
+        // Load micropip package itself
+        await py.loadPackage(["micropip"]);
+        // Now, run Python code to import micropip and then install seaborn with it
+        await py.runPythonAsync(`
+          import micropip
+          await micropip.install('seaborn')
+        `);
+        // Load other packages that are directly available
+        await py.loadPackage(["pandas", "matplotlib"]);
         setPyodide(py);
       } catch (e) {
-        console.error("Failed to load pyodide", e);
+        console.error("Failed to load pyodide or packages", e);
       }
     };
     init();

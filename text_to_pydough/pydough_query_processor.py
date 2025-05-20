@@ -459,8 +459,18 @@ def adapt_and_execute_code(pydough_code, output_file_name, domain_info=None):
     output_file_path = os.path.join("results", output_file_name)
 
     # Create a modified version of test.py with the new pydough code
+    # Get the DataFrame once
+    # For direct script output inspection
+    # Ensure PD_JSON is reliably generated if df_result is a DataFrame
+    # Use date_format and default_handler for better serialization
+    # Print error to stdout as well
+    # Indicate PD_JSON was attempted but failed
+    # If not a DataFrame or empty, or if result itself is simple type
+    # print(result) # Or handle non-DataFrame results appropriately
+    # Indicate no DataFrame for PD_JSON
     adapted_code = f"""
 import pydough
+import pandas as pd # Ensure pandas is imported
 from pydough import init_pydough_context
 
 # Load metadata and connect to database
@@ -473,12 +483,36 @@ def func():
     {pydough_code}
     return result
 
-result = func()
+result_val = func()
+# print(f"[DEBUG ADAPT] Type of result_val: {{type(result_val)}}") # DEBUG PRINT
+# print(f"[DEBUG ADAPT] result_val itself: {{str(result_val)[:500]}}") # DEBUG PRINT (first 500 chars)
+
+df_result = pydough.to_df(result_val)
+# print(f"[DEBUG ADAPT] Type of df_result after pydough.to_df: {{type(df_result)}}") # DEBUG PRINT
+
 print("\\nSQL Query:")
-print(pydough.to_sql(result))
+print(pydough.to_sql(result_val))
 print("\\nResult:")
-print(pydough.to_df(result).head(10))  # Show only first 10 rows
-print("PD_JSON::" + pydough.to_df(result).to_json(orient="split"))
+if isinstance(df_result, pd.DataFrame):
+    # print(f"[DEBUG ADAPT] df_result is a DataFrame. Is it empty? {{df_result.empty}}") # DEBUG PRINT
+    if not df_result.empty:
+        # print("[DEBUG ADAPT] df_result.head():") # DEBUG PRINT
+        print(df_result.head())
+    print(df_result.head(10))
+else:
+    # print(f"[DEBUG ADAPT] df_result is NOT a DataFrame.") # DEBUG PRINT
+    print(df_result)
+
+if isinstance(df_result, pd.DataFrame) and not df_result.empty:
+    try:
+        pd_json_str = df_result.to_json(orient="split", date_format='iso', default_handler=str)
+        print("PD_JSON::" + pd_json_str)
+    except Exception as e:
+        print(f"Error serializing DataFrame to PD_JSON: {{e}}")
+        print("PD_JSON::null")
+else:
+    print("PD_JSON::null")
+print("PD_JSON_END") # Add a marker for easier regex parsing
 """
 
     # Write to Python file in the results directory
@@ -503,26 +537,39 @@ def execute_pydough_script(script_path):
             text=True
         )
         
-        stdout, stderr = process.communicate(timeout=60) 
-        
+        stdout, stderr = process.communicate(timeout=60)
+
+        # print("[DEBUG EXECUTE] Captured stdout (first 1000 chars):")
+        # print(stdout[:1000]) # DEBUG PRINT STDOUT
+
         if process.returncode == 0:
             print(f"✅ Execution successful")
-            print("\nOutput:")
-            print(stdout)
+            raw_pandas_json_string = None
 
-            pandas_df_json = None
-            match = re.search(r"PD_JSON::(.*)", stdout)
+            match = re.search(r"PD_JSON::(.*)PD_JSON_END", stdout, re.DOTALL)
+            
             if match:
-                json_str = match.group(1).strip()
-                try:
-                    pandas_df_json = json.loads(json_str)
-                except Exception as json_err:
-                    print(f"Warning: failed to parse PD_JSON output: {json_err}")
+                # print("[DEBUG EXECUTE] Regex Matched!")
+                captured_group = match.group(1)
+                # print("[DEBUG EXECUTE] Regex captured group (raw first 500 chars):")
+                # print(captured_group[:500]) # DEBUG PRINT CAPTURED GROUP
+                json_str = captured_group.strip()
+                # print("[DEBUG EXECUTE] JSON string after strip (first 500 chars):")
+                # print(json_str[:500]) # DEBUG PRINT JSON_STR
+                if json_str != "null":
+                    raw_pandas_json_string = json_str
+                # else:
+                    # print("[DEBUG EXECUTE] json_str was literally 'null', so raw_pandas_json_string remains None.")
+            # else:
+                # print("[DEBUG EXECUTE] Regex did NOT Match.")
+
+            # print("[DEBUG EXECUTE] Final raw_pandas_json_string before return (first 500 chars):")
+            # print(str(raw_pandas_json_string)[:500]) # DEBUG PRINT FINAL VALUE
 
             return {
                 'success': True,
-                'output': stdout,
-                'pandas_df_json': pandas_df_json
+                'output': stdout, # Full stdout for debugging / other parsing
+                'pandas_df_json_string': raw_pandas_json_string # This is the critical string for frontend
             }
         else:
             print(f"❌ Execution failed with return code {process.returncode}")
@@ -681,28 +728,25 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
                 response = model.prompt(full_prompt_with_history, schema=PyDoughResponse, temperature=0.01)
                 
                 # --- DETAILED INSPECTION OF RESPONSE OBJECT ---
-                print(f"[DEBUG] Type of response object: {type(response)}")
-                print(f"[DEBUG] Attributes of response object: {dir(response)}")
-                try:
-                    print(f"[DEBUG] response.code: {getattr(response, 'code', 'N/A')}")
-                    print(f"[DEBUG] response.explanation: {getattr(response, 'explanation', 'N/A')}")
-                    # If it has a .data or .dict() method, let's try that too
-                    if hasattr(response, 'data'):
-                        print(f"[DEBUG] response.data: {response.data}")
-                    if hasattr(response, 'dict') and callable(response.dict):
-                        print(f"[DEBUG] response.dict(): {response.dict()}")
-                    if hasattr(response, 'model_dump') and callable(response.model_dump): # For Pydantic v2
-                        print(f"[DEBUG] response.model_dump(): {response.model_dump()}")
-                except Exception as inspect_e:
-                    print(f"[DEBUG] Error during response inspection: {inspect_e}")
+                # print(f"[DEBUG] Type of response object: {type(response)}")
+                # print(f"[DEBUG] Attributes of response object: {dir(response)}")
+                # try:
+                    # print(f"[DEBUG] response.code: {getattr(response, 'code', 'N/A')}")
+                    # print(f"[DEBUG] response.explanation: {getattr(response, 'explanation', 'N/A')}")
+                    # if hasattr(response, 'data'):
+                        # print(f"[DEBUG] response.data: {response.data}")
+                    # if hasattr(response, 'dict') and callable(response.dict):
+                        # print(f"[DEBUG] response.dict(): {response.dict()}")
+                    # if hasattr(response, 'model_dump') and callable(response.model_dump): # For Pydantic v2
+                        # print(f"[DEBUG] response.model_dump(): {response.model_dump()}")
+                # except Exception as inspect_e:
+                    # print(f"[DEBUG] Error during response inspection: {inspect_e}")
                 # --- END DETAILED INSPECTION ---
                 
-                # --- Access attributes directly from the response object --- 
                 pydough_code = None
                 explanation = None
                 raw_response_text = None
                 
-                # First, try to get raw text for better debugging
                 try:
                     if hasattr(response, 'text') and callable(response.text):
                         raw_response_text = response.text()
@@ -713,85 +757,73 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
                 except Exception as log_e:
                     raw_response_text = f"[Error getting raw text: {log_e}]"
                 
-                # Print raw text for inspection
-                print(f"[DEBUG] Raw response text: {raw_response_text}")
+                # print(f"[DEBUG] Raw response text: {raw_response_text}")
 
-                # Try multiple approaches to extract the structured data
-                # Approach 1: Parse the raw JSON text directly if available
                 if raw_response_text and '{' in raw_response_text:
                     try:
-                        # Extract the JSON part from raw text if needed
                         json_text = raw_response_text
-                        # If text contains a prefix before the JSON, extract just the JSON part
                         if not json_text.strip().startswith('{'):
                             json_start = json_text.find('{')
                             json_text = json_text[json_start:]
                         
                         parsed_json = json.loads(json_text)
-                        print(f"[DEBUG] Successfully parsed raw response text as JSON: {parsed_json}")
+                        # print(f"[DEBUG] Successfully parsed raw response text as JSON: {parsed_json}")
                         pydough_code = parsed_json.get("code")
                         explanation = parsed_json.get("explanation")
                         
-                        if pydough_code:
-                            print(f"[DEBUG] Successfully extracted code from parsed JSON")
+                        # if pydough_code:
+                            # print(f"[DEBUG] Successfully extracted code from parsed JSON")
                     except json.JSONDecodeError as e:
-                        print(f"[DEBUG] Failed to parse raw text as JSON: {e}")
-                        # Continue to other approaches
+                        # print(f"[DEBUG] Failed to parse raw text as JSON: {e}")
+                        pass # Continue to other approaches
                 
-                # Approach 2: Access via response.response_json
                 if not pydough_code and hasattr(response, 'response_json'):
-                    print(f"[DEBUG] response.response_json found, type: {type(response.response_json)}, value: {response.response_json}")
+                    # print(f"[DEBUG] response.response_json found, type: {type(response.response_json)}, value: {response.response_json}")
                     try:
                         if isinstance(response.response_json, dict):
                             pydough_code = response.response_json.get("code")
                             explanation = response.response_json.get("explanation")
                         elif response.response_json is not None:
-                            # It might be JSON text that needs parsing
                             try:
                                 if isinstance(response.response_json, str):
                                     parsed_json = json.loads(response.response_json)
                                     pydough_code = parsed_json.get("code")
                                     explanation = parsed_json.get("explanation")
                             except json.JSONDecodeError:
-                                print("[DEBUG] response.response_json is a string but not valid JSON")
+                                # print("[DEBUG] response.response_json is a string but not valid JSON")
+                                pass
                     except Exception as e:
-                        print(f"[DEBUG] Error accessing response.response_json: {e}")
+                        # print(f"[DEBUG] Error accessing response.response_json: {e}")
+                        pass
                 
-                # Approach 3: Try other common attributes/methods for structured data
                 if not pydough_code:
-                    # Try response.json() if it's a method
                     if hasattr(response, 'json') and callable(response.json):
                         try:
                             json_data = response.json()
-                            print(f"[DEBUG] response.json() returned: {json_data}")
+                            # print(f"[DEBUG] response.json() returned: {json_data}")
                             if isinstance(json_data, dict):
                                 pydough_code = json_data.get("code")
                                 explanation = json_data.get("explanation")
                         except Exception as e:
-                            print(f"[DEBUG] Error calling response.json(): {e}")
-                        
-                        # Direct attribute access (our original approach)
-                        if not pydough_code and hasattr(response, 'code'):
-                            pydough_code = response.code
-                        if not explanation and hasattr(response, 'explanation'):
-                            explanation = response.explanation
+                            # print(f"[DEBUG] Error calling response.json(): {e}")
+                            pass
                     
-                    # Last resort - extract code with regex from raw_response_text if still not found
+                    if not pydough_code and hasattr(response, 'code'):
+                        pydough_code = response.code
+                    if not explanation and hasattr(response, 'explanation'):
+                        explanation = response.explanation
+                    
                     if not pydough_code and raw_response_text:
-                        print("[DEBUG] Attempting regex extraction as last resort")
-                        # Look for "code": "..." pattern 
-                        code_match = re.search(r'"code"\s*:\s*"(.*?)"(?:,|\})', raw_response_text, re.DOTALL)
+                        # print("[DEBUG] Attempting regex extraction as last resort")
+                        code_match = re.search(r'"code"\\s*:\\s*"(.*?)"(?:,|\\})', raw_response_text, re.DOTALL)
                         if code_match:
-                            # Handle escaped quotes and newlines
                             extracted_code = code_match.group(1)
-                            # Replace escaped characters
-                            extracted_code = extracted_code.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+                            extracted_code = extracted_code.replace("\\\\n", "\\n").replace('\\\\"', '"').replace("\\\\\\\\", "\\\\")
                             pydough_code = extracted_code
-                            print(f"[DEBUG] Extracted code via regex: {pydough_code[:50]}...")
+                            # print(f"[DEBUG] Extracted code via regex: {pydough_code[:50]}...")
                 
-                print(f"[DEBUG] Final pydough_code: {pydough_code if pydough_code else 'None'}")
+                # print(f"[DEBUG] Final pydough_code: {pydough_code if pydough_code else 'None'}")
                 
-                # Now use the extracted values
                 result_data["llm_response"] = f"Structured response (stateless): {raw_response_text}"
             
             except Exception as e:
@@ -807,28 +839,25 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
                  response = model.prompt(prompt, schema=PyDoughResponse, temperature=0.01) # Gets structured response object
                  
                  # --- DETAILED INSPECTION OF RESPONSE OBJECT ---
-                 print(f"[DEBUG] Type of response object: {type(response)}")
-                 print(f"[DEBUG] Attributes of response object: {dir(response)}")
-                 try:
-                     print(f"[DEBUG] response.code: {getattr(response, 'code', 'N/A')}")
-                     print(f"[DEBUG] response.explanation: {getattr(response, 'explanation', 'N/A')}")
-                     # If it has a .data or .dict() method, let's try that too
-                     if hasattr(response, 'data'):
-                         print(f"[DEBUG] response.data: {response.data}")
-                     if hasattr(response, 'dict') and callable(response.dict):
-                         print(f"[DEBUG] response.dict(): {response.dict()}")
-                     if hasattr(response, 'model_dump') and callable(response.model_dump): # For Pydantic v2
-                         print(f"[DEBUG] response.model_dump(): {response.model_dump()}")
-                 except Exception as inspect_e:
-                     print(f"[DEBUG] Error during response inspection: {inspect_e}")
+                 # print(f"[DEBUG] Type of response object: {type(response)}")
+                 # print(f"[DEBUG] Attributes of response object: {dir(response)}")
+                 # try:
+                     # print(f"[DEBUG] response.code: {getattr(response, 'code', 'N/A')}")
+                     # print(f"[DEBUG] response.explanation: {getattr(response, 'explanation', 'N/A')}")
+                     # if hasattr(response, 'data'):
+                         # print(f"[DEBUG] response.data: {response.data}")
+                     # if hasattr(response, 'dict') and callable(response.dict):
+                         # print(f"[DEBUG] response.dict(): {response.dict()}")
+                     # if hasattr(response, 'model_dump') and callable(response.model_dump): # For Pydantic v2
+                         # print(f"[DEBUG] response.model_dump(): {response.model_dump()}")
+                 # except Exception as inspect_e:
+                     # print(f"[DEBUG] Error during response inspection: {inspect_e}")
                  # --- END DETAILED INSPECTION ---
 
-                 # --- Access attributes directly from the response object --- 
                  pydough_code = None
                  explanation = None
                  raw_response_text = None
                  
-                 # First, try to get raw text for better debugging
                  try:
                      if hasattr(response, 'text') and callable(response.text):
                          raw_response_text = response.text()
@@ -839,85 +868,73 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
                  except Exception as log_e:
                      raw_response_text = f"[Error getting raw text: {log_e}]"
                  
-                 # Print raw text for inspection
-                 print(f"[DEBUG] Raw response text: {raw_response_text}")
+                 # print(f"[DEBUG] Raw response text: {raw_response_text}")
 
-                 # Try multiple approaches to extract the structured data
-                 # Approach 1: Parse the raw JSON text directly if available
                  if raw_response_text and '{' in raw_response_text:
                      try:
-                         # Extract the JSON part from raw text if needed
                          json_text = raw_response_text
-                         # If text contains a prefix before the JSON, extract just the JSON part
                          if not json_text.strip().startswith('{'):
                              json_start = json_text.find('{')
                              json_text = json_text[json_start:]
                          
                          parsed_json = json.loads(json_text)
-                         print(f"[DEBUG] Successfully parsed raw response text as JSON: {parsed_json}")
+                         # print(f"[DEBUG] Successfully parsed raw response text as JSON: {parsed_json}")
                          pydough_code = parsed_json.get("code")
                          explanation = parsed_json.get("explanation")
                          
-                         if pydough_code:
-                             print(f"[DEBUG] Successfully extracted code from parsed JSON")
+                         # if pydough_code:
+                             # print(f"[DEBUG] Successfully extracted code from parsed JSON")
                      except json.JSONDecodeError as e:
-                         print(f"[DEBUG] Failed to parse raw text as JSON: {e}")
-                         # Continue to other approaches
+                         # print(f"[DEBUG] Failed to parse raw text as JSON: {e}")
+                         pass # Continue to other approaches
                  
-                 # Approach 2: Access via response.response_json
                  if not pydough_code and hasattr(response, 'response_json'):
-                     print(f"[DEBUG] response.response_json found, type: {type(response.response_json)}, value: {response.response_json}")
+                     # print(f"[DEBUG] response.response_json found, type: {type(response.response_json)}, value: {response.response_json}")
                      try:
                          if isinstance(response.response_json, dict):
                              pydough_code = response.response_json.get("code")
                              explanation = response.response_json.get("explanation")
                          elif response.response_json is not None:
-                             # It might be JSON text that needs parsing
                              try:
                                  if isinstance(response.response_json, str):
                                      parsed_json = json.loads(response.response_json)
                                      pydough_code = parsed_json.get("code")
                                      explanation = parsed_json.get("explanation")
                              except json.JSONDecodeError:
-                                 print("[DEBUG] response.response_json is a string but not valid JSON")
+                                 # print("[DEBUG] response.response_json is a string but not valid JSON")
+                                 pass
                      except Exception as e:
-                         print(f"[DEBUG] Error accessing response.response_json: {e}")
+                         # print(f"[DEBUG] Error accessing response.response_json: {e}")
+                         pass
                 
-                 # Approach 3: Try other common attributes/methods for structured data
                  if not pydough_code:
-                     # Try response.json() if it's a method
                      if hasattr(response, 'json') and callable(response.json):
                          try:
                              json_data = response.json()
-                             print(f"[DEBUG] response.json() returned: {json_data}")
+                             # print(f"[DEBUG] response.json() returned: {json_data}")
                              if isinstance(json_data, dict):
                                  pydough_code = json_data.get("code")
                                  explanation = json_data.get("explanation")
                          except Exception as e:
-                             print(f"[DEBUG] Error calling response.json(): {e}")
+                             # print(f"[DEBUG] Error calling response.json(): {e}")
+                             pass
                      
-                     # Direct attribute access (our original approach)
                      if not pydough_code and hasattr(response, 'code'):
                          pydough_code = response.code
                      if not explanation and hasattr(response, 'explanation'):
                          explanation = response.explanation
                  
-                 # Last resort - extract code with regex from raw_response_text if still not found
                  if not pydough_code and raw_response_text:
-                     print("[DEBUG] Attempting regex extraction as last resort")
-                     # Look for "code": "..." pattern 
-                     code_match = re.search(r'"code"\s*:\s*"(.*?)"(?:,|\})', raw_response_text, re.DOTALL)
+                     # print("[DEBUG] Attempting regex extraction as last resort")
+                     code_match = re.search(r'"code"\\s*:\\s*"(.*?)"(?:,|\\})', raw_response_text, re.DOTALL)
                      if code_match:
-                         # Handle escaped quotes and newlines
                          extracted_code = code_match.group(1)
-                         # Replace escaped characters
-                         extracted_code = extracted_code.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+                         extracted_code = extracted_code.replace("\\\\n", "\\n").replace('\\\\"', '"').replace("\\\\\\\\", "\\\\")
                          pydough_code = extracted_code
-                         print(f"[DEBUG] Extracted code via regex: {pydough_code[:50]}...")
+                         # print(f"[DEBUG] Extracted code via regex: {pydough_code[:50]}...")
                  
-                 print(f"[DEBUG] Final pydough_code: {pydough_code if pydough_code else 'None'}")
+                 # print(f"[DEBUG] Final pydough_code: {pydough_code if pydough_code else 'None'}")
                  
-                 # Now use the extracted values
                  result_data["llm_response"] = f"Structured response (stateless): {raw_response_text}"
              except Exception as e:
                  print(f"⚠️ Structured output failed (stateless): {str(e)}")
@@ -952,29 +969,47 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
                     result_data["reviewed_code"] = reviewed_code
 
             # Adapt code for execution
-            print("\n🔄 Adapting code for execution")
-            safe_query = re.sub(r'[^\\w]', '_', query_text[:20]).strip('_')
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            query_id = f"{domain_name.lower()}_{safe_query}_{timestamp}" # Generate ID here
-            result_data["query_id"] = query_id # Store the ID
-            output_file_name = f"{query_id}.py" # Use query_id for script name
+            print("\n🔄 Adapting and executing PyDough code for domain: {domain_name}...")
+            adapted_code_content, script_path = adapt_and_execute_code(pydough_code, f"{domain_name}_query_{time.time()}.py", domain_info)
+            execution_result = execute_pydough_script(script_path)
+            
+            current_execution_details = {
+                "success": execution_result.get("success", False),
+                "output": execution_result.get("output"),
+                "error": execution_result.get("error"),
+                "result_data": {} 
+            }
 
-            adapted_code_content, output_file_path = adapt_and_execute_code(pydough_code, output_file_name, domain_info)
-            result_data["adapted_code"] = adapted_code_content
-            result_data["output_file"] = output_file_path
+            # Ensure pandas_df_json is robustly handled
+            raw_json_str = execution_result.get("pandas_df_json_string")
+            if raw_json_str: # True if raw_json_str is a non-empty string
+                current_execution_details["result_data"]["pandas_df_json"] = raw_json_str
+            else: # Covers cases where raw_json_str is None (e.g. from PD_JSON::null) or "" (e.g. from PD_JSON:: <empty>)
+                current_execution_details["result_data"]["pandas_df_json"] = None
+            
+            result_data["execution"] = current_execution_details
 
-            # Execute if requested
-            if execute:
-                execution_result = execute_pydough_script(output_file_path)
-                result_data["execution"] = execution_result
-                if execution_result.get("pandas_df_json") is not None:
-                    result_data["pandas_df_json"] = execution_result["pandas_df_json"]
+            if save_results:
+                # Save execution artifacts using the helper function
+                save_execution_artifacts(execution_result, f"{domain_name}_query_{time.time()}")
+
         else:
             print("\n❌ No PyDough code found in the response")
 
     except Exception as e:
         print(f"\n❌ Error processing query: {str(e)}")
         result_data["error"] = str(e)
+        # Ensure 'success' is false if an error occurred during processing,
+        # even if execution wasn't the part that failed.
+        if "execution" not in result_data or not result_data["execution"]:
+            result_data["execution"] = {"success": False, "error": str(e), "result_data": {}}
+        else:
+            # If execution details exist, ensure its success is false and error is set
+            current_exec = result_data["execution"]
+            current_exec["success"] = False
+            if "error" not in current_exec or not current_exec["error"]: # Don't overwrite existing specific error
+                 current_exec["error"] = str(e)
+            result_data["execution"] = current_exec
 
     # 5. Save results if requested
     if save_results:
@@ -1003,26 +1038,43 @@ def process_query(query_text, execute=False, save_results=True, model=None, use_
     if not execute:
         # If execution was not requested, just return the generated code
         return {
-            "success": True,
+            "success": True if pydough_code else False, # Success of generation
             "query": query_text,
             "domain": domain_name,
-            "pydough_code": pydough_code,    # snake_case (backend standard)
-            "pydoughCode": pydough_code,     # camelCase (frontend expects this)
-            "explanation": explanation,      # snake_case
-            "timestamp": datetime.now().isoformat(),
+            "pydough_code": pydough_code,
+            "pydoughCode": pydough_code,
+            "explanation": explanation,
+            "timestamp": result_data["timestamp"], # Use timestamp from result_data
         }
     else:
         # If execution was requested, include execution results
+        final_execution_details = result_data.get("execution")
+
+        if not final_execution_details:
+            # This case can happen if pydough_code generation failed and execute was True.
+            final_execution_details = {
+                "success": False,
+                "error": result_data.get("error", "PyDough code generation failed, so execution was not attempted."),
+                "output": None,
+                "result_data": {}
+            }
+        # Ensure 'success' key exists, default to False if not explicitly set by execution logic
+        # (though prior logic should set it).
+        if "success" not in final_execution_details:
+            final_execution_details["success"] = False
+            if "error" not in final_execution_details: # Add a generic error if none exists
+                final_execution_details["error"] = "Execution success status was not explicitly set."
+
         return {
-            "success": True,
+            # Overall success of the operation: code must be generated, and if execution happened, it must be successful.
+            "success": bool(pydough_code) and final_execution_details.get("success", False),
             "query": query_text,
             "domain": domain_name,
-            "pydough_code": pydough_code,    # snake_case (backend standard)
-            "pydoughCode": pydough_code,     # camelCase (frontend expects this)
-            "explanation": explanation,      # snake_case
-            "timestamp": datetime.now().isoformat(),
-            "execution": execution_result,
-            "pandas_df_json": result_data.get("pandas_df_json") if result_data.get("pandas_df_json") is not None else None,
+            "pydough_code": pydough_code,
+            "pydoughCode": pydough_code, # Frontend expects this
+            "explanation": explanation,
+            "timestamp": result_data["timestamp"], # Use timestamp from result_data
+            "execution": final_execution_details
         }
 
 def process_all_queries(queries, max_queries=None, execute=False, save_results=True, use_code_review=False, domain=None):
