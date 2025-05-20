@@ -5,6 +5,9 @@ import { useAppContext } from '../context/AppContext';
 import Editor from '@monaco-editor/react';
 import toast, { Toaster } from 'react-hot-toast';
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+
 const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
   const [apiKey, setApiKey] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -17,7 +20,7 @@ const ApiKeySetup: React.FC<{ onKeySet: () => void }> = ({ onKeySet }) => {
     setError(null);
     
     try {
-      const response = await fetch('http://localhost:5001/api/api-key', {
+      const response = await fetch(`${API_BASE_URL}/api-key`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -209,7 +212,7 @@ const QueryPage: React.FC = () => {
   useEffect(() => {
     const checkApiStatus = async () => {
       try {
-        const response = await fetch('http://localhost:5001/api/status');
+        const response = await fetch(`${API_BASE_URL}/status`);
         const data = await response.json();
         
         if (data.success && !data.llm_api_configured) {
