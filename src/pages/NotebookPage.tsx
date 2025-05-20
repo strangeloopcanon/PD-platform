@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Play, Save, PlusCircle, CheckCircle, Code, FileText, Trash2, Download, Upload, ChevronRight, Lightbulb, CheckCircle2, AlignLeft, RefreshCw, BarChart3, LineChart, PieChart, File, GitBranch, Clock, Edit3, Check, X, ChevronDown } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import Editor from '@monaco-editor/react';
 import toast, { Toaster } from 'react-hot-toast';
+import { loadPyodide, PyodideInterface } from 'pyodide';
 
 interface NotebookCell {
   id: string;
@@ -21,6 +22,21 @@ const NotebookPage: React.FC = () => {
   const [copilotQuery, setCopilotQuery] = useState<string>('');
   const [loadingCopilotSuggestion, setLoadingCopilotSuggestion] = useState(false);
   const [activeCellId, setActiveCellId] = useState<string | null>(null);
+  const [pyodide, setPyodide] = useState<PyodideInterface | null>(null);
+  const dfRef = useRef<any | null>(null);
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const py = await loadPyodide();
+        await py.loadPackage(["pandas", "matplotlib", "seaborn"]);
+        setPyodide(py);
+      } catch (e) {
+        console.error("Failed to load pyodide", e);
+      }
+    };
+    init();
+  }, []);
 
   // Initial cells
   const [cells, setCells] = useState<NotebookCell[]>([
@@ -71,26 +87,36 @@ const NotebookPage: React.FC = () => {
     }
   }, []);
 
-  // Effect to add cell with data from query page
+  // Effect to add cell with data from query page and seed Pyodide
   useEffect(() => {
     if (selectedDataFrame) {
+      dfRef.current = selectedDataFrame;
       const newCell: NotebookCell = {
         id: Date.now().toString(),
         type: 'code',
         content: `# Data loaded from Query Page\ndf = pd.DataFrame(${JSON.stringify(selectedDataFrame, null, 2)})\n\ndf.head()`,
-        isActive: true, 
-        isExecuting: false, 
+        isActive: true,
+        isExecuting: false,
         output: undefined
       };
       setCells(prevCells => {
-        const updatedCells = prevCells.map(c => ({...c, isActive: false }));
+        const updatedCells = prevCells.map(c => ({ ...c, isActive: false }));
         updatedCells.push(newCell);
         return updatedCells;
       });
       setActiveCellId(newCell.id);
-      setSelectedDataFrame(null);
     }
-  }, [selectedDataFrame, setSelectedDataFrame]);
+
+    if (pyodide && dfRef.current) {
+      try {
+        pyodide.runPython(`import pandas as pd\ndf = pd.DataFrame(${JSON.stringify(dfRef.current)})`);
+        dfRef.current = null;
+        setSelectedDataFrame(null);
+      } catch (e) {
+        console.error('Failed to seed dataframe', e);
+      }
+    }
+  }, [selectedDataFrame, pyodide, setSelectedDataFrame]);
 
   const handleCellContentChange = (id: string, content: string) => {
     setCells(cells.map(cell => 
@@ -150,51 +176,58 @@ const NotebookPage: React.FC = () => {
     setActiveCellId(newActiveId);
   };
 
-  const executeCell = (id: string) => {
-    let targetCell: NotebookCell | undefined;
+  const executeCell = async (id: string) => {
+    if (!pyodide) return;
+    let code = '';
     setCells(prevCells => prevCells.map(cell => {
       if (cell.id === id) {
-        targetCell = { ...cell, isExecuting: true };
-        return targetCell;
+        code = cell.content;
+        return { ...cell, isExecuting: true };
       }
       return cell;
     }));
-    
-    if (!targetCell) return;
-    const codeContent = targetCell.content.toLowerCase();
 
-    setTimeout(() => {
+    if (!code) return;
+
+    const escaped = code.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+    try {
+      await pyodide.runPythonAsync(`
+import sys, io, base64, matplotlib.pyplot as plt
+_stdout = io.StringIO()
+_stderr = io.StringIO()
+old_stdout, old_stderr = sys.stdout, sys.stderr
+sys.stdout, sys.stderr = _stdout, _stderr
+img_data = None
+try:
+    exec("""${escaped}""", globals())
+    if plt.get_fignums():
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        plt.close()
+        img_data = base64.b64encode(buf.getvalue()).decode('utf-8')
+finally:
+    sys.stdout, sys.stderr = old_stdout, old_stderr
+output_text = _stdout.getvalue() + _stderr.getvalue()
+__cell_result = {'text': output_text, 'image': img_data}
+`);
+      const result = pyodide.globals.get('__cell_result').toJs({ dict_converter: Object });
       setCells(prevCells => prevCells.map(cell => {
         if (cell.id === id) {
-          let output;
-          
-          if (codeContent.includes('df.head()') || codeContent.includes('print(df')) {
-            output = `   category  total_sales\n0  Electronics   527350.75\n1  Home & Kitchen   423150.25\n2  Clothing   356280.50`;
-          } else if (codeContent.includes('barplot') || codeContent.includes('kind=\'bar\'')) {
-            output = { type: 'image', url: 'https://via.placeholder.com/600x400.png?text=Mock+Bar+Chart' };
-          } else if (codeContent.includes('lineplot') || codeContent.includes('kind=\'line\'')) {
-            output = { type: 'image', url: 'https://via.placeholder.com/600x400.png?text=Mock+Line+Chart' };
-          } else if (codeContent.includes('scatterplot') || codeContent.includes('kind=\'scatter\'')) {
-            output = { type: 'image', url: 'https://via.placeholder.com/600x400.png?text=Mock+Scatter+Plot' };
-          } else if (codeContent.includes('heatmap')) {
-            output = { type: 'image', url: 'https://via.placeholder.com/600x400.png?text=Mock+Heatmap' };
-          } else if (codeContent.includes('plt.show()') || codeContent.includes('.plot()')) {
-            output = { type: 'image', url: 'https://via.placeholder.com/600x400.png?text=Mock+Generic+Plot' };
-          } else if (codeContent.includes('correlation')) {
-            output = `\n              customer_age  order_value\ncustomer_age     1.000000      0.687542\norder_value      0.687542      1.000000`;
-          } else if (codeContent.trim() && !codeContent.startsWith('#') && !codeContent.includes('import')) {
-            // Mock success for non-empty, non-comment/import code
-            output = 'Executed successfully'; 
-          } else {
-            // No output for imports, comments, or empty cells
-            output = undefined;
+          let out: any = undefined;
+          if (result.image) {
+            out = { type: 'image', url: `data:image/png;base64,${result.image}` };
+          } else if (result.text.trim()) {
+            out = result.text;
           }
-          
-          return { ...cell, isExecuting: false, output };
+          return { ...cell, isExecuting: false, output: out };
         }
         return cell;
       }));
-    }, 1500);
+    } catch (err) {
+      setCells(prevCells => prevCells.map(cell => (
+        cell.id === id ? { ...cell, isExecuting: false, output: String(err) } : cell
+      )));
+    }
   };
 
   const executeAllCells = () => {

@@ -412,11 +412,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             
             // Extract data results
             if (data.execution.result_data) {
-              if (data.execution.result_data.pandas_df) {
+              const rd = data.execution.result_data;
+              if (rd.pandas_df) {
                 // Format pandas dataframe as HTML table
-                dataResult = `<div class="results-html">${data.execution.result_data.pandas_df}</div>`;
-              } else if (data.execution.result_data.result_str) {
-                dataResult = data.execution.result_data.result_str;
+                dataResult = `<div class="results-html">${rd.pandas_df}</div>`;
+              } else if (rd.result_str) {
+                dataResult = rd.result_str;
+              }
+
+              // Parse dataframe JSON for notebook usage
+              if (rd.pandas_df_json) {
+                try {
+                  const dfObj = JSON.parse(rd.pandas_df_json);
+                  setSelectedDataFrame(dfObj);
+                } catch (e) {
+                  console.warn('Failed to parse pandas_df_json:', e);
+                }
               }
             }
           }
@@ -463,6 +474,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           let executionError: string | null = null; // Variable for specific execution error
 
           if (data.execution) { // Check if execution results exist
+            // Pass dataframe JSON to notebook if available
+            if (data.execution.result_data && data.execution.result_data.pandas_df_json) {
+              try {
+                const dfObj = JSON.parse(data.execution.result_data.pandas_df_json);
+                setSelectedDataFrame(dfObj);
+              } catch (e) {
+                console.warn('Failed to parse pandas_df_json:', e);
+              }
+            }
+
             // More robust SQL extraction - look for it in different places
             const executionOutput = data.execution.output || '';
             
