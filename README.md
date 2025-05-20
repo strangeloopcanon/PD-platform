@@ -121,7 +121,7 @@ explore next, see
         deactivate
         cd .. # Return to project root
         ```
-    *   Alternatively, the application *may* fall back to an environment variable `GEMINI_API_KEY` if set in `text_to_pydough/.env`, but using `llm keys set gemini` is recommended.
+    *   Alternatively, you can copy `text_to_pydough/.env.example` to `text_to_pydough/.env` and set your `GEMINI_API_KEY` there (you may also change `PORT` to run on a different port). Using `llm keys set gemini` is still recommended.
 
 5.  **(Optional) Configure API Base URL:**
     If your backend runs on a different host or port, create a `.env` file in
