@@ -171,3 +171,4 @@ text_to_pydough/data/DepMap.db
 text_to_pydough/data/ProteinNetwork.db
 text_to_pydough/data/depmap.json
 text_to_pydough/data/proteinnetwork.json
+text_to_pydough/data/depmap.md

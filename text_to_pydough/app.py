@@ -18,6 +18,8 @@ from flask_cors import CORS
 import pandas as pd
 from datetime import datetime
 import traceback # Import traceback
+import subprocess
+from domains import DOMAINS
 
 # Load environment variables from .env file if it exists
 try:
@@ -39,7 +41,7 @@ except ImportError:
     
 # Create Flask app
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}})  # Enable CORS for frontend server
 
 # Create a results directory if it doesn't exist
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results")
@@ -55,218 +57,48 @@ if GEMINI_API_KEY:
     os.environ["LLM_GEMINI_KEY"] = GEMINI_API_KEY
 
 # Try to import PyDough processor
+import pydough_query_processor as pqp
+
+# Try to import LangGraph implementation
 try:
-    import pydough_query_processor as pqp
-    
-    # Try to import LangGraph implementation
-    try:
-        import langgraph_impl as lgi
-        LANGGRAPH_AVAILABLE = True
-        print("✅ LangGraph implementation available")
-    except ImportError as e:
-        LANGGRAPH_AVAILABLE = False
-        print(f"⚠️ Warning: LangGraph implementation not available: {e}")
-        print("LangGraph functionality will be disabled")
-    
-    # Try to check if LLM API is configured by importing llm
-    try:
-        import llm
-        # Check for model availability - attempt both models
-        try:
-            model_code_gen = llm.get_model("gemini-2.5-pro-preview-05-06")
-            print("✅ Successfully configured Gemini 2.5 Pro Preview for code generation")
-        except Exception as e:
-            print(f"⚠️ Warning: Could not load gemini-2.5-pro-preview-05-06: {e}")
-            print("⚠️ Code generation functionality may be limited")
-            
-        # Also check for the flash model for domain detection
-        try:
-            model_domain = llm.get_model("gemini-2.0-flash")
-            print("✅ Successfully configured Gemini 2.0 Flash for domain detection")
-        except Exception as e:
-            print(f"⚠️ Warning: Could not load gemini-2.0-flash: {e}")
-            
-        # If we got here, at least one model is working
-        LLM_API_CONFIGURED = True
-        PYDOUGH_AVAILABLE = True
-        print("✅ LLM API configured successfully")
-    except Exception as e:
-        LLM_ERROR_MESSAGE = str(e)
-        PYDOUGH_AVAILABLE = True
-        print(f"⚠️ Warning: LLM API not properly configured: {e}")
-        print("You need to set Gemini API keys in environment variables.")
-        print("1. Create a .env file in text_to_pydough/ directory with: GEMINI_API_KEY=your_api_key")
-        print("   OR")
-        print("2. Run: source venv/bin/activate && llm keys set gemini")
+    import langgraph_impl as lgi
+    LANGGRAPH_AVAILABLE = True
+    print("✅ LangGraph implementation available")
 except ImportError as e:
-    print(f"Warning: Could not import pydough_query_processor: {e}")
-    PYDOUGH_AVAILABLE = False
-    LLM_ERROR_MESSAGE = "PyDough processor module not available"
-    # Create a mock domains dictionary for testing
-    class MockDomains(dict):
-        def __init__(self):
-            super().__init__()
-            self["Broker"] = {
-                "keywords": ["customer", "ticker", "transaction", "stock", "price"],
-                "metadata_file": "data/Broker_graph.json",
-                "database_file": "data/Broker.db",
-                "exists": True
-            }
-            self["Dealership"] = {
-                "keywords": ["car", "make", "model", "salesperson", "customer"],
-                "metadata_file": "data/Dealership_graph.json",
-                "database_file": "data/Dealership.db",
-                "exists": True
-            }
-            self["DermTreatment"] = {
-                "keywords": ["doctor", "patient", "drug", "treatment", "diagnosis"],
-                "metadata_file": "data/DermTreatment_graph.json",
-                "database_file": "data/DermTreatment.db",
-                "exists": True
-            }
-            self["Ewallet"] = {
-                "keywords": ["user", "transaction", "merchant", "wallet", "balance"],
-                "metadata_file": "data/Ewallet_graph.json",
-                "database_file": "data/Ewallet.db",
-                "exists": True
-            }
-            self["TPCH"] = {
-                "keywords": ["supplier", "order", "lineitem", "customer", "nation"],
-                "metadata_file": "data/tpch_graph.json",
-                "database_file": "data/tpch.db",
-                "exists": True
-            }
-    
-    # Create a mock pqp module
-    class MockPQP:
-        def __init__(self):
-            self.DOMAINS = MockDomains()
-            
-        def detect_domain(self, query):
-            # Simple keyword matching for demo
-            for domain_name, domain_data in self.DOMAINS.items():
-                if domain_name.lower() in query.lower():
-                    return domain_name, domain_data["metadata_file"], domain_data["database_file"]
-            return "Broker", "data/Broker_graph.json", "data/Broker.db"  # Default
-            
-        def process_query(self, query_text, execute=False, save_results=False, domain=None, **kwargs):
-            # Detect domain if not provided
-            if domain is None:
-                domain_name, _, _ = self.detect_domain(query_text)
-            else:
-                domain_name = domain
-                
-            # Mock pydough code generation
-            pydough_code = f"result = {domain_name}.Customers.CALCULATE(name=name, email=email)"
-            
-            # Return expected structure
-            return {
-                "query": query_text,
-                "domain": domain_name,
-                "pydough_code": pydough_code,
-                "sql": f"SELECT name, email FROM {domain_name.lower()}_customers",
-                "timestamp": datetime.now().isoformat(),
-                "query_id": f"mock_{int(time.time())}"
-            }
-            
-        def adapt_and_execute_code(self, code, output_file_name, domain_info=None):
-            """Create adaptable code but don't run it yet."""
-            # Get domain info
-            if domain_info is None:
-                domain_name = "Broker"
-                metadata_file = "data/Broker_graph.json"
-                database_file = "data/Broker.db"
-            else:
-                domain_name, metadata_file, database_file = domain_info
-            
-            # Create results directory if it doesn't exist
-            os.makedirs(RESULTS_DIR, exist_ok=True)
-            
-            # Create output file path
-            output_file_path = os.path.join(RESULTS_DIR, output_file_name)
-            
-            # Create modified code with imports and setup
-            adapted_code = f"""
-import pandas as pd
-# Mock PyDough setup for {domain_name}
-# Using metadata from {metadata_file}
-# Using database {database_file}
+    LANGGRAPH_AVAILABLE = False
+    print(f"⚠️ Warning: LangGraph implementation not available: {e}")
+    print("LangGraph functionality will be disabled")
 
-# Original code:
-{code}
-
-# Create a mock result
-result_data = [
-    {{"name": "John Doe", "email": "john@example.com"}},
-    {{"name": "Jane Smith", "email": "jane@example.com"}},
-    {{"name": "Bob Johnson", "email": "bob@example.com"}}
-]
-result = pd.DataFrame(result_data)
-
-print("\\nSQL Query:")
-print("SELECT name, email FROM {domain_name.lower()}_customers")
-print("\\nResult:")
-print(result.head(10))
-"""
-            
-            # Write to file
-            with open(output_file_path, 'w') as f:
-                f.write(adapted_code)
-                
-            print(f"Created mock PyDough script at {output_file_path}")
-            return adapted_code, output_file_path
+# Try to check if LLM API is configured by importing llm
+try:
+    import llm
+    # Check for model availability - attempt both models
+    try:
+        model_code_gen = llm.get_model("gemini-2.5-pro-preview-05-06")
+        print("✅ Successfully configured Gemini 2.5 Pro Preview for code generation")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not load gemini-2.5-pro-preview-05-06: {e}")
+        print("⚠️ Code generation functionality may be limited")
         
-        def execute_pydough_script(self, script_path):
-            """Execute the generated script in a subprocess."""
-            try:
-                # In mock mode, we'll just pretend to execute and return a fixed output
-                mock_output = f"""
-SQL Query:
-SELECT name, email FROM customers
-
-Result:
-      name             email
-0  John Doe    john@example.com
-1  Jane Smith  jane@example.com
-2  Bob Johnson  bob@example.com
-"""
-                print(f"Mock execution of {script_path} (not actually running)")
-                print(mock_output)
-                
-                return {
-                    'success': True,
-                    'output': mock_output,
-                    'execution_time': 0.1
-                }
-            except Exception as e:
-                return {
-                    'success': False,
-                    'error': f"Mock execution error: {str(e)}"
-                }
-            
-        def save_execution_artifacts(self, result, base_filename):
-            """Saves execution output to files."""
-            # Make sure results dir exists
-            os.makedirs(RESULTS_DIR, exist_ok=True)
-            
-            # Create a mock artifact for the execution
-            artifacts = []
-            if result.get('success'):
-                # Save mock SQL file
-                sql_file_path = os.path.join(RESULTS_DIR, f"sql_{base_filename}.sql")
-                with open(sql_file_path, 'w') as f:
-                    f.write("SELECT name, email FROM customers")
-                artifacts.append(sql_file_path)
-                
-                # Save mock output file
-                output_file_path = os.path.join(RESULTS_DIR, f"output_{base_filename}.txt")
-                with open(output_file_path, 'w') as f:
-                    f.write(result.get('output', 'Mock execution output'))
-                artifacts.append(output_file_path)
-            
-            return artifacts
-    
-    pqp = MockPQP()
+    # Also check for the flash model for domain detection
+    try:
+        model_domain = llm.get_model("gemini-2.0-flash")
+        print("✅ Successfully configured Gemini 2.0 Flash for domain detection")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not load gemini-2.0-flash: {e}")
+        
+    # If we got here, at least one model is working
+    LLM_API_CONFIGURED = True
+    PYDOUGH_AVAILABLE = True
+    print("✅ LLM API configured successfully")
+except Exception as e:
+    LLM_ERROR_MESSAGE = str(e)
+    PYDOUGH_AVAILABLE = True
+    print(f"⚠️ Warning: LLM API not properly configured: {e}")
+    print("You need to set Gemini API keys in environment variables.")
+    print("1. Create a .env file in text_to_pydough/ directory with: GEMINI_API_KEY=your_api_key")
+    print("   OR")
+    print("2. Run: source venv/bin/activate && llm keys set gemini")
 
 @app.route("/api/status", methods=["GET"])
 def get_status():
@@ -367,35 +199,35 @@ def list_databases():
                     {
                         "name": "Broker",
                         "keywords": ["customer", "ticker", "transaction", "stock", "price"],
-                        "metadataFile": "data/Broker_graph.json",
+                        "metadataFile": "data/broker.json",
                         "databaseFile": "data/Broker.db",
                         "exists": True  # Changed to true to make connection button display
                     },
                     {
                         "name": "Dealership",
                         "keywords": ["car", "make", "model", "salesperson", "customer"],
-                        "metadataFile": "data/Dealership_graph.json", 
+                        "metadataFile": "data/dealership.json", 
                         "databaseFile": "data/Dealership.db",
                         "exists": True  # Added second database
                     },
                     {
                         "name": "DermTreatment",
                         "keywords": ["doctor", "patient", "drug", "treatment", "diagnosis"],
-                        "metadataFile": "data/DermTreatment_graph.json",
+                        "metadataFile": "data/dermtreatment.json",
                         "databaseFile": "data/DermTreatment.db",
                         "exists": True
                     },
                     {
                         "name": "Ewallet",
                         "keywords": ["user", "transaction", "merchant", "wallet", "balance"],
-                        "metadataFile": "data/Ewallet_graph.json",
+                        "metadataFile": "data/ewallet.json",
                         "databaseFile": "data/Ewallet.db",
                         "exists": True
                     },
                     {
                         "name": "TPCH",
                         "keywords": ["supplier", "order", "lineitem", "customer", "nation"],
-                        "metadataFile": "data/tpch_graph.json",
+                        "metadataFile": "data/tpch.json",
                         "databaseFile": "data/tpch.db",
                         "exists": True
                     }
@@ -769,6 +601,120 @@ def process_query_langgraph():
             "success": False,
             "error": str(e)
         }), 500
+
+# --- API: List DBs and schema status (Fortified) ---
+@app.route('/api/databases/status', methods=['GET'])
+def api_databases_status():
+    DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+    result = []
+    try:
+        if not os.path.isdir(DATA_DIR):
+            return jsonify({"error": "Data directory not found", "databases": []}), 500
+        
+        # Get all files in the directory
+        all_files = os.listdir(DATA_DIR)
+        
+        # Find all .db files
+        dbs = [f for f in all_files if f.lower().endswith('.db')]
+        
+        # For each DB, check if metadata files exist (case-insensitive)
+        for db_filename in dbs:
+            base_name = os.path.splitext(db_filename)[0]
+            display_name = base_name
+            base_name_lower = base_name.lower()
+            
+            # Case-insensitive check for JSON metadata - check multiple possible patterns
+            # to support both our new format (basename.json) and legacy formats (_graph.json, etc.)
+            has_json = any(
+                f.lower() == f"{base_name_lower}.json" or
+                f.lower() == f"{base_name_lower}_graph.json" or
+                (f.lower().startswith(base_name_lower) and f.lower().endswith('_graph.json')) or
+                (f.lower().startswith(base_name_lower) and f.lower().endswith('_demo_graph.json'))
+                for f in all_files
+            )
+            
+            # Case-insensitive check for MD file
+            has_md = any(
+                f.lower() == f"{base_name_lower}.md"
+                for f in all_files
+            )
+            
+            # Debug info
+            print(f"DB: {db_filename}, Base: {base_name}, Has JSON: {has_json}, Has MD: {has_md}")
+            
+            result.append({
+                "db_filename": db_filename,
+                "display_name": display_name,
+                "base_name": base_name,
+                "has_json": has_json,
+                "has_md": has_md
+            })
+        
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        print("Error in /api/databases/status:", e)
+        traceback.print_exc()
+        return jsonify({"error": str(e), "databases": []}), 500
+
+@app.route('/api/databases/generate-metadata', methods=['POST'])
+def api_generate_metadata():
+    DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+    data = request.get_json()
+    db_filename = data.get('db_filename')
+    if not db_filename or not db_filename.endswith('.db'):
+        return jsonify({"success": False, "error": "Invalid or missing db_filename"}), 400
+    db_full_path = os.path.join(DATA_DIR, db_filename)
+    if not os.path.exists(db_full_path):
+        return jsonify({"success": False, "error": "Database file not found"}), 404
+    
+    script_path = os.path.join(os.path.dirname(__file__), 'generate_pydough_metadata.py')
+    python_executable = sys.executable
+    command = [python_executable, script_path, '--db', db_full_path]
+    
+    # Debug: Log the command we're about to run
+    print(f"Running metadata generation command: {' '.join(command)}")
+    
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        
+        # Print stdout for debugging
+        if result.stdout:
+            print(f"Metadata generation stdout: {result.stdout}")
+        
+        # Print stderr if any
+        if result.stderr:
+            print(f"Metadata generation stderr: {result.stderr}")
+            
+        if result.returncode == 0:
+            # Refresh the database scan
+            # Re-check if the files now exist
+            base_name = os.path.splitext(db_filename)[0]
+            base_name_lower = base_name.lower()
+            json_path = os.path.join(DATA_DIR, f"{base_name_lower}.json")
+            md_path = os.path.join(DATA_DIR, f"{base_name_lower}.md")
+            
+            return jsonify({
+                "success": True, 
+                "message": "Metadata generated successfully.",
+                "details": {
+                    "db_path": db_full_path,
+                    "json_path": f"{base_name_lower}.json",
+                    "md_path": f"{base_name_lower}.md",
+                    "json_exists": os.path.exists(json_path),
+                    "md_exists": os.path.exists(md_path)
+                }
+            })
+        else:
+            return jsonify({
+                "success": False, 
+                "error": result.stderr or "Script execution failed.",
+                "stdout": result.stdout,
+                "returncode": result.returncode
+            }), 500
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == "__main__":
     # Show status message about PyDough availability
