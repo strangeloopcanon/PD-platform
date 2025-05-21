@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 
 // Define domain interface based on PyDough's DOMAINS
-interface Domain {
+export interface Domain {
   name: string;
   keywords: string[];
   metadataFile: string;

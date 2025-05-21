@@ -1,0 +1,383 @@
+{
+  "tpch": {
+    "NATION": {
+      "type": "simple_table",
+      "table_path": "main.NATION",
+      "properties": {
+        "N_NATIONKEY": {
+          "type": "table_column",
+          "column_name": "N_NATIONKEY",
+          "data_type": "int64"
+        },
+        "N_NAME": {
+          "type": "table_column",
+          "column_name": "N_NAME",
+          "data_type": "string"
+        },
+        "N_REGIONKEY": {
+          "type": "table_column",
+          "column_name": "N_REGIONKEY",
+          "data_type": "int64"
+        },
+        "N_COMMENT": {
+          "type": "table_column",
+          "column_name": "N_COMMENT",
+          "data_type": "string"
+        }
+      },
+      "unique_properties": [
+        "N_NATIONKEY"
+      ]
+    },
+    "REGION": {
+      "type": "simple_table",
+      "table_path": "main.REGION",
+      "properties": {
+        "R_REGIONKEY": {
+          "type": "table_column",
+          "column_name": "R_REGIONKEY",
+          "data_type": "int64"
+        },
+        "R_NAME": {
+          "type": "table_column",
+          "column_name": "R_NAME",
+          "data_type": "string"
+        },
+        "R_COMMENT": {
+          "type": "table_column",
+          "column_name": "R_COMMENT",
+          "data_type": "string"
+        }
+      },
+      "unique_properties": [
+        "R_REGIONKEY"
+      ]
+    },
+    "PART": {
+      "type": "simple_table",
+      "table_path": "main.PART",
+      "properties": {
+        "P_PARTKEY": {
+          "type": "table_column",
+          "column_name": "P_PARTKEY",
+          "data_type": "int64"
+        },
+        "P_NAME": {
+          "type": "table_column",
+          "column_name": "P_NAME",
+          "data_type": "string"
+        },
+        "P_MFGR": {
+          "type": "table_column",
+          "column_name": "P_MFGR",
+          "data_type": "string"
+        },
+        "P_BRAND": {
+          "type": "table_column",
+          "column_name": "P_BRAND",
+          "data_type": "string"
+        },
+        "P_TYPE": {
+          "type": "table_column",
+          "column_name": "P_TYPE",
+          "data_type": "string"
+        },
+        "P_SIZE": {
+          "type": "table_column",
+          "column_name": "P_SIZE",
+          "data_type": "int64"
+        },
+        "P_CONTAINER": {
+          "type": "table_column",
+          "column_name": "P_CONTAINER",
+          "data_type": "string"
+        },
+        "P_RETAILPRICE": {
+          "type": "table_column",
+          "column_name": "P_RETAILPRICE",
+          "data_type": "int64"
+        },
+        "P_COMMENT": {
+          "type": "table_column",
+          "column_name": "P_COMMENT",
+          "data_type": "string"
+        }
+      },
+      "unique_properties": [
+        "P_PARTKEY"
+      ]
+    },
+    "SUPPLIER": {
+      "type": "simple_table",
+      "table_path": "main.SUPPLIER",
+      "properties": {
+        "S_SUPPKEY": {
+          "type": "table_column",
+          "column_name": "S_SUPPKEY",
+          "data_type": "int64"
+        },
+        "S_NAME": {
+          "type": "table_column",
+          "column_name": "S_NAME",
+          "data_type": "string"
+        },
+        "S_ADDRESS": {
+          "type": "table_column",
+          "column_name": "S_ADDRESS",
+          "data_type": "string"
+        },
+        "S_NATIONKEY": {
+          "type": "table_column",
+          "column_name": "S_NATIONKEY",
+          "data_type": "int64"
+        },
+        "S_PHONE": {
+          "type": "table_column",
+          "column_name": "S_PHONE",
+          "data_type": "string"
+        },
+        "S_ACCTBAL": {
+          "type": "table_column",
+          "column_name": "S_ACCTBAL",
+          "data_type": "int64"
+        },
+        "S_COMMENT": {
+          "type": "table_column",
+          "column_name": "S_COMMENT",
+          "data_type": "string"
+        }
+      },
+      "unique_properties": [
+        "S_SUPPKEY"
+      ]
+    },
+    "PARTSUPP": {
+      "type": "simple_table",
+      "table_path": "main.PARTSUPP",
+      "properties": {
+        "PS_PARTKEY": {
+          "type": "table_column",
+          "column_name": "PS_PARTKEY",
+          "data_type": "int64"
+        },
+        "PS_SUPPKEY": {
+          "type": "table_column",
+          "column_name": "PS_SUPPKEY",
+          "data_type": "int64"
+        },
+        "PS_AVAILQTY": {
+          "type": "table_column",
+          "column_name": "PS_AVAILQTY",
+          "data_type": "int64"
+        },
+        "PS_SUPPLYCOST": {
+          "type": "table_column",
+          "column_name": "PS_SUPPLYCOST",
+          "data_type": "int64"
+        },
+        "PS_COMMENT": {
+          "type": "table_column",
+          "column_name": "PS_COMMENT",
+          "data_type": "string"
+        }
+      },
+      "unique_properties": [
+        "PS_PARTKEY",
+        "PS_SUPPKEY"
+      ]
+    },
+    "CUSTOMER": {
+      "type": "simple_table",
+      "table_path": "main.CUSTOMER",
+      "properties": {
+        "C_CUSTKEY": {
+          "type": "table_column",
+          "column_name": "C_CUSTKEY",
+          "data_type": "int64"
+        },
+        "C_NAME": {
+          "type": "table_column",
+          "column_name": "C_NAME",
+          "data_type": "string"
+        },
+        "C_ADDRESS": {
+          "type": "table_column",
+          "column_name": "C_ADDRESS",
+          "data_type": "string"
+        },
+        "C_NATIONKEY": {
+          "type": "table_column",
+          "column_name": "C_NATIONKEY",
+          "data_type": "int64"
+        },
+        "C_PHONE": {
+          "type": "table_column",
+          "column_name": "C_PHONE",
+          "data_type": "string"
+        },
+        "C_ACCTBAL": {
+          "type": "table_column",
+          "column_name": "C_ACCTBAL",
+          "data_type": "int64"
+        },
+        "C_MKTSEGMENT": {
+          "type": "table_column",
+          "column_name": "C_MKTSEGMENT",
+          "data_type": "string"
+        },
+        "C_COMMENT": {
+          "type": "table_column",
+          "column_name": "C_COMMENT",
+          "data_type": "string"
+        }
+      },
+      "unique_properties": [
+        "C_CUSTKEY"
+      ]
+    },
+    "ORDERS": {
+      "type": "simple_table",
+      "table_path": "main.ORDERS",
+      "properties": {
+        "O_ORDERKEY": {
+          "type": "table_column",
+          "column_name": "O_ORDERKEY",
+          "data_type": "int64"
+        },
+        "O_CUSTKEY": {
+          "type": "table_column",
+          "column_name": "O_CUSTKEY",
+          "data_type": "int64"
+        },
+        "O_ORDERSTATUS": {
+          "type": "table_column",
+          "column_name": "O_ORDERSTATUS",
+          "data_type": "string"
+        },
+        "O_TOTALPRICE": {
+          "type": "table_column",
+          "column_name": "O_TOTALPRICE",
+          "data_type": "int64"
+        },
+        "O_ORDERDATE": {
+          "type": "table_column",
+          "column_name": "O_ORDERDATE",
+          "data_type": "date"
+        },
+        "O_ORDERPRIORITY": {
+          "type": "table_column",
+          "column_name": "O_ORDERPRIORITY",
+          "data_type": "string"
+        },
+        "O_CLERK": {
+          "type": "table_column",
+          "column_name": "O_CLERK",
+          "data_type": "string"
+        },
+        "O_SHIPPRIORITY": {
+          "type": "table_column",
+          "column_name": "O_SHIPPRIORITY",
+          "data_type": "int64"
+        },
+        "O_COMMENT": {
+          "type": "table_column",
+          "column_name": "O_COMMENT",
+          "data_type": "string"
+        }
+      },
+      "unique_properties": [
+        "O_ORDERKEY"
+      ]
+    },
+    "LINEITEM": {
+      "type": "simple_table",
+      "table_path": "main.LINEITEM",
+      "properties": {
+        "L_ORDERKEY": {
+          "type": "table_column",
+          "column_name": "L_ORDERKEY",
+          "data_type": "int64"
+        },
+        "L_PARTKEY": {
+          "type": "table_column",
+          "column_name": "L_PARTKEY",
+          "data_type": "int64"
+        },
+        "L_SUPPKEY": {
+          "type": "table_column",
+          "column_name": "L_SUPPKEY",
+          "data_type": "int64"
+        },
+        "L_LINENUMBER": {
+          "type": "table_column",
+          "column_name": "L_LINENUMBER",
+          "data_type": "int64"
+        },
+        "L_QUANTITY": {
+          "type": "table_column",
+          "column_name": "L_QUANTITY",
+          "data_type": "int64"
+        },
+        "L_EXTENDEDPRICE": {
+          "type": "table_column",
+          "column_name": "L_EXTENDEDPRICE",
+          "data_type": "int64"
+        },
+        "L_DISCOUNT": {
+          "type": "table_column",
+          "column_name": "L_DISCOUNT",
+          "data_type": "int64"
+        },
+        "L_TAX": {
+          "type": "table_column",
+          "column_name": "L_TAX",
+          "data_type": "int64"
+        },
+        "L_RETURNFLAG": {
+          "type": "table_column",
+          "column_name": "L_RETURNFLAG",
+          "data_type": "string"
+        },
+        "L_LINESTATUS": {
+          "type": "table_column",
+          "column_name": "L_LINESTATUS",
+          "data_type": "string"
+        },
+        "L_SHIPDATE": {
+          "type": "table_column",
+          "column_name": "L_SHIPDATE",
+          "data_type": "date"
+        },
+        "L_COMMITDATE": {
+          "type": "table_column",
+          "column_name": "L_COMMITDATE",
+          "data_type": "date"
+        },
+        "L_RECEIPTDATE": {
+          "type": "table_column",
+          "column_name": "L_RECEIPTDATE",
+          "data_type": "date"
+        },
+        "L_SHIPINSTRUCT": {
+          "type": "table_column",
+          "column_name": "L_SHIPINSTRUCT",
+          "data_type": "string"
+        },
+        "L_SHIPMODE": {
+          "type": "table_column",
+          "column_name": "L_SHIPMODE",
+          "data_type": "string"
+        },
+        "L_COMMENT": {
+          "type": "table_column",
+          "column_name": "L_COMMENT",
+          "data_type": "string"
+        }
+      },
+      "unique_properties": [
+        "L_ORDERKEY",
+        "L_LINENUMBER"
+      ]
+    }
+  }
+}

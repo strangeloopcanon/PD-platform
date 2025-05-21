@@ -20,6 +20,8 @@ from datetime import datetime
 from tqdm import tqdm
 from typing import Optional, List, Dict
 import sys # Add sys import
+from domains import DOMAINS
+import textwrap
 
 # Make sure llm package and pydantic are installed
 try:
@@ -46,36 +48,6 @@ class DomainDetection(BaseModel):
     # confidence: float = 1.0  # Temporarily commenting out
     # reasoning: Optional[str] = None # Temporarily commenting out
 
-# Domain configuration data
-DOMAINS = {
-    "Broker": {
-        "keywords": ["customer", "ticker", "transaction", "stock", "price", "share", "trade", "broker", "exchange"],
-        "metadata_file": "data/Broker_graph.json",
-        "database_file": "data/Broker.db"
-    },
-    "Dealership": {
-        "keywords": ["car", "make", "model", "salesperson", "customer", "sale", "dealership", "inventory", "vehicle", "vin"],
-        "metadata_file": "data/Dealership_graph.json",
-        "database_file": "data/Dealership.db"
-    },
-    "DermTreatment": {
-        "keywords": ["doctor", "patient", "drug", "treatment", "diagnosis", "dermatology", "medical", "clinic", "adverse", "derm"],
-        "metadata_file": "data/DermTreatment_graph.json",
-        "database_file": "data/DermTreatment.db"
-    },
-    "Ewallet": {
-        "keywords": ["user", "transaction", "merchant", "wallet", "balance", "payment", "coupon", "ewallet", "digital", "finance"],
-        "metadata_file": "data/Ewallet_graph.json",
-        "database_file": "data/Ewallet.db"
-    },
-    "TPCH": {
-        "keywords": ["supplier", "order", "lineitem", "customer", "nation", "region", "part", "partsupp", "tpch"],
-        "metadata_file": "data/tpch_demo_graph.json",
-        "database_file": "data/tpch.db"
-    }
-    # Can add more domains as needed
-}
-
 def check_requirements():
     """Check that all required files and dependencies are available."""
     print("\n--- Checking Requirements ---")
@@ -85,7 +57,7 @@ def check_requirements():
         'queries.csv', 
         'cheatsheet.md', 
         'data/broker.md', # Changed from defog_broker.md in root
-        'data/Broker_graph.json', 
+        'data/broker.json', 
         'data/Broker.db'
     ]
     # We should also ideally check for the .md files for other domains if they are considered essential.
@@ -447,7 +419,7 @@ def adapt_and_execute_code(pydough_code, output_file_name, domain_info=None):
     # If domain_info not provided, use default Broker
     if domain_info is None:
         domain_name = "Broker"
-        metadata_file = "data/Broker_graph.json"
+        metadata_file = "data/broker.json"
         database_file = "data/Broker.db"
     else:
         domain_name, metadata_file, database_file = domain_info
@@ -458,49 +430,43 @@ def adapt_and_execute_code(pydough_code, output_file_name, domain_info=None):
     # Construct the full path for the output file inside the results directory
     output_file_path = os.path.join("results", output_file_name)
 
-    # Create a modified version of test.py with the new pydough code
-    # Get the DataFrame once
-    # For direct script output inspection
-    # Ensure PD_JSON is reliably generated if df_result is a DataFrame
-    # Use date_format and default_handler for better serialization
-    # Print error to stdout as well
-    # Indicate PD_JSON was attempted but failed
-    # If not a DataFrame or empty, or if result itself is simple type
-    # print(result) # Or handle non-DataFrame results appropriately
-    # Indicate no DataFrame for PD_JSON
+    # --- PATCH: Dedent and indent the generated code ---
+    clean_code = textwrap.dedent(pydough_code.strip())
+    indented_code = textwrap.indent(clean_code, '    ')
+
     adapted_code = f"""
 import pydough
 import pandas as pd # Ensure pandas is imported
 from pydough import init_pydough_context
 
 # Load metadata and connect to database
-pydough.active_session.load_metadata_graph("{metadata_file}", "{domain_name}")
-pydough.active_session.connect_database("sqlite", database="{database_file}")
+pydough.active_session.load_metadata_graph(\"{metadata_file}\", \"{domain_name}\")
+pydough.active_session.connect_database(\"sqlite\", database=\"{database_file}\")
 
 @init_pydough_context(pydough.active_session.metadata)
 def func():
     # Generated PyDough code
-    {pydough_code}
+{indented_code}
     return result
 
 result_val = func()
-# print(f"[DEBUG ADAPT] Type of result_val: {{type(result_val)}}") # DEBUG PRINT
-# print(f"[DEBUG ADAPT] result_val itself: {{str(result_val)[:500]}}") # DEBUG PRINT (first 500 chars)
+# print(f\"[DEBUG ADAPT] Type of result_val: {{type(result_val)}}\") # DEBUG PRINT
+# print(f\"[DEBUG ADAPT] result_val itself: {{str(result_val)[:500]}}\") # DEBUG PRINT (first 500 chars)
 
 df_result = pydough.to_df(result_val)
-# print(f"[DEBUG ADAPT] Type of df_result after pydough.to_df: {{type(df_result)}}") # DEBUG PRINT
+# print(f\"[DEBUG ADAPT] Type of df_result after pydough.to_df: {{type(df_result)}}\") # DEBUG PRINT
 
 print("\\nSQL Query:")
 print(pydough.to_sql(result_val))
 print("\\nResult:")
 if isinstance(df_result, pd.DataFrame):
-    # print(f"[DEBUG ADAPT] df_result is a DataFrame. Is it empty? {{df_result.empty}}") # DEBUG PRINT
+    # print(f\"[DEBUG ADAPT] df_result is a DataFrame. Is it empty? {{df_result.empty}}\") # DEBUG PRINT
     if not df_result.empty:
         # print("[DEBUG ADAPT] df_result.head():") # DEBUG PRINT
         print(df_result.head())
     print(df_result.head(10))
 else:
-    # print(f"[DEBUG ADAPT] df_result is NOT a DataFrame.") # DEBUG PRINT
+    # print(f\"[DEBUG ADAPT] df_result is NOT a DataFrame.\") # DEBUG PRINT
     print(df_result)
 
 if isinstance(df_result, pd.DataFrame) and not df_result.empty:
